@@ -1,0 +1,17 @@
+import { test } from '@pages/testExtender';
+import creds from '@fixtures/creds';
+import path from 'path';
+
+const authDir = path.join(process.cwd(), 'e2e', 'auth');
+
+test.describe('Setup user session authentication', () => {
+  test('Setup default user storage state', async ({ page, api, homePage }) => {
+    const defaultCredentials = creds.getCredentials('default');
+    const storageStatePath = path.join(authDir, 'default.json');
+
+    await homePage.visit('/');
+    await api.performAPILogin(defaultCredentials);
+    await page.context().storageState({ path: storageStatePath });
+    console.log(`Saved session storageState to ${storageStatePath}`);
+  });
+});

@@ -1,0 +1,46 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+
+export class ToastComponent {
+  readonly root: Locator;
+  readonly successToast: Locator;
+  readonly errorToast: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator?: Locator,
+  ) {
+    this.root =
+      rootLocator ||
+      page
+        .getByRole('status')
+        .or(page.getByRole('alert'))
+        .or(page.locator('.toast, [data-test="toast"]'));
+    this.successToast = this.root
+      .filter({ hasText: /success|completed|saved/i })
+      .or(this.root.locator('.toast-success, [data-test="toast-success"]'));
+    this.errorToast = page
+      .getByRole('alert')
+      .or(this.root.locator('.toast-error, [data-test="toast-error"]'));
+  }
+
+  async verifyNoFatalErrors(): Promise<void> {
+    await test.step('Verify no error toast is displayed', async () => {
+      // toHaveCount is non-strict, so this stays correct when several alerts are on the page.
+      await expect(this.errorToast).toHaveCount(0);
+    });
+  }
+
+  async checkNoErrorToast(): Promise<void> {
+    await this.verifyNoFatalErrors();
+  }
+
+  async expectSuccessToast(message?: string): Promise<void> {
+    await test.step(`Verify success toast ${message ? `with text "${message}"` : ''}`, async () => {
+      const toast = this.successToast.first();
+      await expect(toast).toBeVisible();
+      if (message) {
+        await expect(toast).toContainText(message);
+      }
+    });
+  }
+}

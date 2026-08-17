@@ -1,0 +1,25 @@
+import { timeout } from '@fixtures/constants';
+import { Locator, Page, expect, test } from '@playwright/test';
+
+export class LoaderComponent {
+  readonly root: Locator;
+  readonly fullPageLoader: Locator;
+  readonly inlineSpinner: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator?: Locator,
+  ) {
+    this.root =
+      rootLocator ||
+      page.getByRole('progressbar').or(page.locator('.spinner, .app-loader, [data-test="loader"]'));
+    this.fullPageLoader = this.root.locator('[data-test="full-loader-in-progress"]');
+    this.inlineSpinner = this.root.locator('.spinner, .app-loader');
+  }
+
+  async waitForFinishLoading(timeoutMs: number = timeout.medium): Promise<void> {
+    await test.step('Wait for loader to be hidden', async () => {
+      await expect(this.root).toBeHidden({ timeout: timeoutMs });
+    });
+  }
+}

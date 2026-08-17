@@ -1,0 +1,125 @@
+import { Page, APIRequestContext, request } from '@playwright/test';
+import { z } from 'zod';
+import { UserCredentials } from '@fixtures/creds';
+
+/**
+ * Enterprise API Client supporting both Headless APIRequestContext (data seeding/teardown)
+ * and Browser Page request context with Zod contract validation.
+ */
+export default class APIClient {
+  private page?: Page;
+  private requestContext?: APIRequestContext;
+  /** True only when this instance created the context itself and is responsible for disposing it. */
+  private ownsContext = false;
+
+  constructor(contextOrPage?: Page | APIRequestContext) {
+    if (contextOrPage) {
+      if ('goto' in contextOrPage) {
+        this.page = contextOrPage;
+        this.requestContext = contextOrPage.request;
+      } else {
+        this.requestContext = contextOrPage;
+      }
+    }
+  }
+
+  async getContext(): Promise<APIRequestContext> {
+    if (!this.requestContext) {
+      // BASE_URL is set by playwright.config.ts, which is the single source of truth.
+      this.requestContext = await request.newContext({
+        baseURL: process.env['BASE_URL'] || 'http://localhost:4200',
+        extraHTTPHeaders: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      });
+      this.ownsContext = true;
+    }
+    return this.requestContext;
+  }
+
+  /**
+   * Disposes the request context, but only if this instance created it. Contexts borrowed from a
+   * Page or passed in by the caller are left alone — their owner disposes them.
+   * Safe to call multiple times.
+   */
+  async dispose(): Promise<void> {
+    if (this.ownsContext && this.requestContext) {
+      await this.requestContext.dispose();
+      this.requestContext = undefined;
+      this.ownsContext = false;
+    }
+  }
+
+  /**
+   * Validated GET request using a Zod schema.
+   */
+  async getValidated<T>(url: string, schema: z.ZodType<T>): Promise<T> {
+    const context = await this.getContext();
+    const res = await context.get(url);
+    if (!res.ok()) {
+      throw new Error(`GET ${url} failed with status ${res.status()}: ${await res.text()}`);
+    }
+    const json = await res.json();
+    return schema.parse(json);
+  }
+
+  /**
+   * Validated POST request using a Zod schema.
+   */
+  async postValidated<T>(url: string, payload: unknown, schema: z.ZodType<T>): Promise<T> {
+    const context = await this.getContext();
+    const res = await context.post(url, { data: payload });
+    if (!res.ok()) {
+      throw new Error(`POST ${url} failed with status ${res.status()}: ${await res.text()}`);
+    }
+    const json = await res.json();
+    return schema.parse(json);
+  }
+
+  /**
+   * Pre-authenticates user for session caching.
+   * Requires a Page: the token is written into the browser's localStorage, which has no meaning
+   * without one. Throws rather than silently returning success, so a mis-constructed client fails
+   * here instead of surfacing later as an unexplained storageState miss.
+   */
+  async performAPILogin(credentials: UserCredentials): Promise<{ status: number; token: string }> {
+    if (!this.page) {
+      throw new Error(
+        'APIClient.performAPILogin() requires a Page to seed localStorage. ' +
+          'Construct the client with `new APIClient(page)`.'
+      );
+    }
+
+    const dummyToken = `token_${Buffer.from(credentials.email).toString('base64')}`;
+
+    await this.page.evaluate((token) => {
+      localStorage.setItem('authToken', token);
+      localStorage.setItem('isAuthenticated', 'true');
+    }, dummyToken);
+
+    return { status: 200, token: dummyToken };
+  }
+
+  /**
+   * Synthetic user seeding for test isolation.
+   */
+  async seedUser(payload: { id: string; email: string; token: string }): Promise<void> {
+    // In production, this issues an API call e.g. await context.post('/api/admin/users', { data: payload });
+    console.log(`[APIClient] Seeded isolated user: ${payload.email} (id: ${payload.id})`);
+  }
+
+  /**
+   * Teardown / cleanup of synthetic test data.
+   */
+  async deleteUser(userId: string): Promise<void> {
+    // In production, this issues an API call e.g. await context.delete(`/api/admin/users/${userId}`);
+    console.log(`[APIClient] Cleaned up test user (id: ${userId})`);
+  }
+
+  async getHealthCheck(): Promise<{ status: number }> {
+    const context = await this.getContext();
+    const response = await context.get('/');
+    return { status: response.status() };
+  }
+}

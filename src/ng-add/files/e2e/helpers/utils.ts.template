@@ -1,0 +1,14 @@
+import { Page, expect } from '@playwright/test';
+
+/**
+ * Utility functions for Playwright test operations.
+ * Modern Playwright auto-waiting assertions are preferred over manual delays.
+ */
+
+export async function waitForURL(page: Page, urlPattern: string | RegExp, timeoutMs = 10000): Promise<void> {
+  await expect(page).toHaveURL(urlPattern, { timeout: timeoutMs });
+}
+
+export async function getLocalStorageItem(page: Page, key: string): Promise<string | null> {
+  return await page.evaluate((k) => localStorage.getItem(k), key);
+}

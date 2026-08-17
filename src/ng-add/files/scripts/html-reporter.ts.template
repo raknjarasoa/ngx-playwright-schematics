@@ -1,0 +1,74 @@
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { parsePlaywrightResults, passRate as computePassRate } from './lib/parseResults';
+
+export class HTMLDashboardReporter {
+  private rootDir = process.cwd();
+  private resultsPath = join(this.rootDir, 'artifacts', 'results.json');
+  private dashboardPath = join(this.rootDir, 'artifacts', 'test-dashboard.html');
+
+  buildDashboard(): void {
+    console.log('🎨 Generating Interactive HTML Dashboard...');
+    let passed = 0,
+      failed = 0,
+      flaky = 0,
+      skipped = 0,
+      totalDuration = 0,
+      passRate = '0';
+
+    if (existsSync(this.resultsPath)) {
+      try {
+        const results = JSON.parse(readFileSync(this.resultsPath, 'utf-8'));
+        const summary = parsePlaywrightResults(results);
+        ({ passed, failed, flaky, skipped } = summary);
+        totalDuration = summary.durationMs;
+        passRate = computePassRate(summary).toFixed(1);
+      } catch (e) {
+        console.error('Error reading results.json for dashboard:', e);
+      }
+    }
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enterprise E2E Test Execution Dashboard</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
+    .card { background: #1e293b; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #334155; }
+    h1 { font-size: 1.875rem; color: #38bdf8; margin-top: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+    .metric-card { background: #0f172a; border-radius: 8px; padding: 1rem; text-align: center; border: 1px solid #334155; }
+    .metric-label { font-size: 0.875rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric { font-size: 2.25rem; font-weight: bold; margin-top: 0.5rem; }
+    .passed { color: #4ade80; }
+    .flaky { color: #f59e0b; }
+    .failed { color: #f87171; }
+    .skipped { color: #94a3b8; }
+    .rate { color: #38bdf8; }
+    .duration { color: #a78bfa; font-size: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🚀 Enterprise E2E Test Execution Dashboard</h1>
+    <p>Angular with Playwright - Test Execution Telemetry</p>
+    <div class="grid">
+      <div class="metric-card"><div class="metric-label">First-Attempt Pass Rate</div><div class="metric rate">${passRate}%</div></div>
+      <div class="metric-card"><div class="metric-label">Passed</div><div class="metric passed">${passed}</div></div>
+      <div class="metric-card"><div class="metric-label">Flaky</div><div class="metric flaky">${flaky}</div></div>
+      <div class="metric-card"><div class="metric-label">Failed</div><div class="metric failed">${failed}</div></div>
+      <div class="metric-card"><div class="metric-label">Skipped</div><div class="metric skipped">${skipped}</div></div>
+      <div class="metric-card"><div class="metric-label">Total Duration</div><div class="metric duration">${(totalDuration / 1000).toFixed(1)}s</div></div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    writeFileSync(this.dashboardPath, html);
+    console.log(`✅ Interactive Dashboard generated at ${this.dashboardPath}`);
+  }
+}
+
+new HTMLDashboardReporter().buildDashboard();

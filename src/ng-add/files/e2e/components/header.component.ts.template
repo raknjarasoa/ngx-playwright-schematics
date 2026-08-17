@@ -1,0 +1,28 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+
+export class HeaderComponent {
+  readonly root: Locator;
+  readonly titleHeading: Locator;
+  readonly logo: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator?: Locator,
+  ) {
+    this.root =
+      rootLocator || page.getByRole('banner').or(page.locator('app-header, header, .header'));
+    this.titleHeading = this.root
+      .getByRole('heading', { level: 1 })
+      .or(page.getByRole('heading', { level: 1 }));
+    this.logo = this.root.locator('svg.angular-logo, img.logo, svg');
+  }
+
+  async verifyHeadingContains(expectedText: string): Promise<void> {
+    await test.step(`Verify header heading contains "${expectedText}"`, async () => {
+      // .first() keeps this deterministic if a banner heading and a page heading both match.
+      const heading = this.titleHeading.first();
+      await expect(heading).toBeVisible();
+      await expect(heading).toContainText(expectedText);
+    });
+  }
+}

@@ -1,0 +1,92 @@
+import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const baseURL = process.env['BASE_URL'] || 'http://localhost:4200';
+process.env['BASE_URL'] = baseURL;
+
+export default defineConfig({
+  testDir: './e2e/specs',
+  snapshotDir: './e2e/snapshots/',
+  snapshotPathTemplate: '{snapshotDir}/{arg}-{projectName}-{platform}{ext}',
+  timeout: 60 * 1000,
+  expect: { timeout: process.env['CI'] ? 30_000 : 15_000 },
+  fullyParallel: true,
+  forbidOnly: !!process.env['CI'],
+  retries: process.env['CI'] ? 2 : 0,
+  workers: process.env['CI'] ? 2 : undefined,
+  reportSlowTests: null,
+  globalSetup: require.resolve('./e2e/global/global-setup'),
+  globalTeardown: require.resolve('./e2e/global/global-teardown'),
+  reporter: [
+    ['html', { open: 'never', outputFolder: 'artifacts/playwright-report' }],
+    [
+      'allure-playwright',
+      {
+        detail: true,
+        resultsDir: 'artifacts/allure-results',
+        suiteTitle: false,
+        environmentInfo: {
+          framework: 'Playwright',
+          node: process.version,
+          OS: process.platform,
+          baseURL: baseURL,
+          'CI/CD Test Run': process.env['CI'] ? 'Yes' : 'No',
+        },
+      },
+    ],
+    ['json', { outputFile: 'artifacts/results.json' }],
+    [
+      'junit',
+      {
+        outputFile: 'artifacts/junit/test-output-[hash].xml',
+        embedAnnotationsAsProperties: true,
+      },
+    ],
+  ],
+  use: {
+    actionTimeout: 15_000,
+    navigationTimeout: 30_000,
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    trace: 'on-first-retry',
+    baseURL: baseURL,
+    ignoreHTTPSErrors: true,
+  },
+  projects: [
+    {
+      name: 'setup',
+      testMatch: /.*\.setup\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1900, height: 850 },
+      },
+    },
+    {
+      name: 'Chrome',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1900, height: 850 },
+        storageState: 'e2e/auth/default.json',
+      },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'Firefox',
+      use: {
+        ...devices['Desktop Firefox'],
+        viewport: { width: 1900, height: 850 },
+        storageState: 'e2e/auth/default.json',
+      },
+      dependencies: ['setup'],
+    },
+  ],
+
+  webServer: {
+    command: 'npm start',
+    url: 'http://localhost:4200',
+    reuseExistingServer: !process.env['CI'],
+    timeout: 120_000,
+  },
+});

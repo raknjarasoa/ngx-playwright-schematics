@@ -1,0 +1,10 @@
+import { test as base } from '@playwright/test';
+import APIClient from '@helpers/apiClient';
+
+export type APIFixtures = {
+  api: APIClient;
+};
+
+export const apiFixtures = base.extend<APIFixtures>({
+  api: async ({ page }, use) => await use(new APIClient(page)),
+});

@@ -1,0 +1,28 @@
+export interface UserCredentials {
+  email: string;
+  password?: string;
+  token?: string;
+}
+
+class CredsManager {
+  private accounts: Record<string, UserCredentials> = {
+    default: {
+      email: process.env['E2E_USER_EMAIL'] || 'admin@example.com',
+      password: process.env['E2E_USER_PASSWORD'] || 'Password123!',
+    },
+    guest: {
+      email: 'guest@example.com',
+      password: 'GuestPassword123!',
+    },
+  };
+
+  getCredentials(userRole: string = 'default'): UserCredentials {
+    const creds = this.accounts[userRole];
+    if (!creds) {
+      throw new Error(`No credentials found for role: ${userRole}`);
+    }
+    return creds;
+  }
+}
+
+export default new CredsManager();

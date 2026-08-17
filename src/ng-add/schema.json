@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "NgxPlaywrightSchematicsNgAddSchema",
+  "title": "ngx-playwright-schematics ng-add options",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "The name of the Angular project to configure Playwright E2E testing for.",
+      "$default": {
+        "$source": "projectName"
+      }
+    },
+    "installBrowsers": {
+      "type": "boolean",
+      "default": false,
+      "description": "Automatically install Playwright browser binaries during setup.",
+      "x-prompt": "Would you like to install Playwright browser binaries now?"
+    },
+    "overwrite": {
+      "type": "boolean",
+      "default": true,
+      "description": "Gracefully resolve and update existing configuration files."
+    }
+  }
+}

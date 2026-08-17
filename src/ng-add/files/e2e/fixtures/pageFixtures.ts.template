@@ -1,0 +1,16 @@
+import { test as base } from '@playwright/test';
+import Routes from '@pages/routes';
+import HomePage from '@pages/homePage';
+import LoginPage from '@pages/loginPage';
+
+export type PageFixtures = {
+  routes: Routes;
+  homePage: HomePage;
+  loginPage: LoginPage;
+};
+
+export const pageFixtures = base.extend<PageFixtures>({
+  routes: async ({ page }, use) => await use(new Routes(page)),
+  homePage: async ({ page }, use) => await use(new HomePage(page)),
+  loginPage: async ({ page }, use) => await use(new LoginPage(page)),
+});

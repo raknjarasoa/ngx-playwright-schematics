@@ -1,0 +1,133 @@
+import { test as base } from '@playwright/test';
+import { z } from 'zod';
+import { randomBytes, randomUUID } from 'crypto';
+import APIClient from '@helpers/apiClient';
+
+/**
+ * Enterprise Zod API Schemas for Contract Testing
+ */
+export const UserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  name: z.string().min(1),
+  role: z.enum(['admin', 'user', 'guest']).default('user'),
+  token: z.string().min(10),
+  createdAt: z.string().datetime().optional(),
+});
+export type User = z.infer<typeof UserSchema>;
+
+export const AuthResponseSchema = z.object({
+  token: z.string(),
+  user: UserSchema,
+  expiresIn: z.number().positive(),
+});
+export type AuthResponse = z.infer<typeof AuthResponseSchema>;
+
+export const ErrorResponseSchema = z.object({
+  error: z.string(),
+  statusCode: z.number(),
+  timestamp: z.string().optional(),
+});
+export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+
+/**
+ * Synthetic Test Data Generators
+ */
+export function generateUserData(overrides: Partial<User> = {}): User {
+  const id = randomUUID();
+  const hex = randomBytes(4).toString('hex');
+  return {
+    id,
+    email: `testuser-${hex}@example.com`,
+    name: `Test User ${hex}`,
+    role: 'user',
+    token: `token_${randomBytes(16).toString('hex')}`,
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+export type DataFactoryFixtures = {
+  createdUser: User;
+  mockNetworkFault: (urlPattern: string | RegExp, status?: number, errorMsg?: string) => Promise<void>;
+  mockNetworkLatency: (urlPattern: string | RegExp, delayMs?: number) => Promise<void>;
+  mockRateLimit: (urlPattern: string | RegExp) => Promise<void>;
+};
+
+export const dataFactoryFixture = base.extend<DataFactoryFixtures>({
+  /**
+   * Auto-provisioned isolated synthetic user with lifecycle cleanup
+   */
+  createdUser: async ({}, use) => {
+    const apiClient = new APIClient();
+    const testUser = generateUserData();
+
+    // 1. Setup: Seed data before test executes
+    await apiClient.seedUser(testUser);
+
+    // 2. Yield user to test
+    await use(testUser);
+
+    // 3. Teardown: Clean up data, then release any request context the client opened
+    try {
+      await apiClient.deleteUser(testUser.id);
+    } finally {
+      await apiClient.dispose();
+    }
+  },
+
+  /**
+   * Fault Injection: Simulate 500 / 503 HTTP server crashes
+   */
+  mockNetworkFault: async ({ page }, use) => {
+    const mocker = async (
+      urlPattern: string | RegExp,
+      status = 500,
+      errorMsg = 'Simulated Enterprise Network Fault'
+    ) => {
+      await page.route(urlPattern, async (route) => {
+        const body: ErrorResponse = {
+          error: errorMsg,
+          statusCode: status,
+          timestamp: new Date().toISOString(),
+        };
+        await route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify(body),
+        });
+      });
+    };
+    await use(mocker);
+  },
+
+  /**
+   * Performance / Latency Injection: Simulate slow connections / timeout scenarios
+   */
+  mockNetworkLatency: async ({ page }, use) => {
+    const latencyMocker = async (urlPattern: string | RegExp, delayMs = 1500) => {
+      await page.route(urlPattern, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await route.continue();
+      });
+    };
+    await use(latencyMocker);
+  },
+
+  /**
+   * Rate Limit Injection: Simulate 429 Too Many Requests
+   */
+  mockRateLimit: async ({ page }, use) => {
+    const rateLimitMocker = async (urlPattern: string | RegExp) => {
+      await page.route(urlPattern, async (route) => {
+        await route.fulfill({
+          status: 429,
+          contentType: 'application/json',
+          headers: { 'Retry-After': '30' },
+          body: JSON.stringify({ error: 'Too Many Requests - Rate Limit Exceeded', statusCode: 429 }),
+        });
+      });
+    };
+    await use(rateLimitMocker);
+  },
+});

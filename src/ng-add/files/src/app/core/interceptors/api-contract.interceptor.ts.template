@@ -1,0 +1,56 @@
+import { HttpInterceptorFn, HttpResponse } from '@angular/common/http';
+import { tap } from 'rxjs';
+import { z } from 'zod';
+
+/**
+ * Registry of Zod schemas mapped to API endpoint URL patterns.
+ * Allows safe-parsing responses in Angular runtime to catch API contract drift early.
+ */
+export const apiContractsRegistry = new Map<string | RegExp, z.ZodTypeAny>();
+
+/**
+ * Register an API schema contract for runtime telemetry and drift detection.
+ */
+export function registerApiContract(urlPattern: string | RegExp, schema: z.ZodTypeAny): void {
+  apiContractsRegistry.set(urlPattern, schema);
+}
+
+/**
+ * Angular HTTP Interceptor that intercepts all outgoing/incoming requests
+ * and validates responses against registered Zod contracts using safeParse().
+ * Logs contract drift warnings to telemetry / browser console without crashing the UI.
+ */
+export const apiContractInterceptor: HttpInterceptorFn = (req, next) => {
+  return next(req).pipe(
+    tap({
+      next: (event) => {
+        if (event instanceof HttpResponse && event.url) {
+          for (const [pattern, schema] of apiContractsRegistry.entries()) {
+            let matches = false;
+            if (typeof pattern === 'string') {
+              matches = event.url.includes(pattern);
+            } else if (pattern instanceof RegExp) {
+              pattern.lastIndex = 0; // Reset state in case of /g flag
+              matches = pattern.test(event.url);
+            }
+
+            if (matches && event.body) {
+              const result = schema.safeParse(event.body);
+              if (!result.success) {
+                console.warn(
+                  `[API Contract Drift Detected] Schema validation mismatch on ${req.method} ${event.url}:\n`,
+                  result.error.format()
+                );
+              }
+            }
+          }
+        }
+      },
+      error: (error) => {
+        if (error?.url?.includes('/api/')) {
+          console.warn(`[API Network Error] ${req.method} ${error.url} returned status: ${error.status}`);
+        }
+      },
+    })
+  );
+};

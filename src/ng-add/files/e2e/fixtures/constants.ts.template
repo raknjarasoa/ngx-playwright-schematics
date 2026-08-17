@@ -1,0 +1,17 @@
+export const APP_TITLE = 'angular-with-playwright';
+export const APP_TITLE_DISPLAY = 'AngularWithPlaywright';
+
+export const timeout = {
+  short: 5000,
+  medium: 10000,
+  large: 30000,
+  extraLarge: 60000,
+  pageLoadShort: 5000,
+  pageLoadMedium: 15000,
+};
+
+export const navigation = {
+  Home: 'Home',
+  Dashboard: 'Dashboard',
+  Settings: 'Settings',
+} as const;

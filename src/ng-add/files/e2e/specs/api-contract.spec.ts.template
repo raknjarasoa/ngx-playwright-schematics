@@ -1,0 +1,115 @@
+import { test, expect } from '@fixtures/index';
+import { UserSchema, AuthResponseSchema, generateUserData } from '@fixtures/dataFactoryFixture';
+
+test.describe('API Contract Validation & Network Fault Resilience', () => {
+  test(
+    'should validate synthetic data generation and auto-cleanup lifecycle',
+    {
+      tag: ['@api', '@contract', '@smoke'],
+    },
+    async ({ createdUser }) => {
+      // Validate runtime schema conformity with Zod
+      const parsedUser = UserSchema.parse(createdUser);
+      expect(parsedUser.id).toBeDefined();
+      expect(parsedUser.email).toContain('@example.com');
+      expect(parsedUser.role).toBe('user');
+    }
+  );
+
+  test(
+    'should mock and validate API contract responses via Zod',
+    {
+      tag: ['@api', '@contract', '@regression'],
+    },
+    async ({ page, homePage }) => {
+      await homePage.visit('/');
+
+      const mockUser = generateUserData({ role: 'admin' });
+      const mockAuthResponse = {
+        token: 'auth_tok_jwt_secure_sample',
+        user: mockUser,
+        expiresIn: 3600,
+      };
+
+      // Mock API endpoint
+      await page.route('**/api/auth/me', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(mockAuthResponse),
+        });
+      });
+
+      // Fetch within browser context
+      const response = await page.evaluate(async () => {
+        const res = await fetch('/api/auth/me');
+        return await res.json();
+      });
+
+      // Strict fail-fast contract validation
+      const validated = AuthResponseSchema.parse(response);
+      expect(validated.user.role).toBe('admin');
+      expect(validated.expiresIn).toBe(3600);
+    }
+  );
+
+  test(
+    'should gracefully handle simulated 500 server network fault',
+    {
+      tag: ['@api', '@resilience', '@regression'],
+    },
+    async ({ page, homePage, mockNetworkFault, toastComponent }) => {
+      await homePage.visit('/');
+
+      // Mock network fault on API endpoint
+      await mockNetworkFault('**/api/data/**', 500, 'Database Connection Pool Exhausted');
+
+      // Trigger request from frontend context
+      const response = await page.evaluate(async () => {
+        const res = await fetch('/api/data/records');
+        return { status: res.status, body: await res.json() };
+      });
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toContain('Database Connection Pool');
+      // Toast verification ensures UI did not crash fatally
+      await toastComponent.verifyNoFatalErrors();
+    }
+  );
+
+  test(
+    'should simulate rate limit 429 response',
+    {
+      tag: ['@api', '@resilience'],
+    },
+    async ({ page, homePage, mockRateLimit }) => {
+      await homePage.visit('/');
+
+      await mockRateLimit('**/api/sensitive-action');
+
+      const response = await page.evaluate(async () => {
+        const res = await fetch('/api/sensitive-action');
+        return { status: res.status, body: await res.json() };
+      });
+
+      expect(response.status).toBe(429);
+      expect(response.body.error).toContain('Rate Limit Exceeded');
+    }
+  );
+});
+
+test.describe('Unauthenticated Flow Opt-Out', () => {
+  // Explicitly opt out of pre-cached storage state
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test(
+    'should verify guest user unauthenticated state',
+    {
+      tag: ['@auth', '@smoke'],
+    },
+    async ({ homePage }) => {
+      await homePage.visit('/');
+      await homePage.verifyHomePageLoaded();
+    }
+  );
+});

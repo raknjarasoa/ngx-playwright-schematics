@@ -1,0 +1,7 @@
+import { FullConfig } from '@playwright/test';
+
+async function globalTeardown(_config: FullConfig) {
+  console.log('🧹 Global Teardown: Completed test suite execution.');
+}
+
+export default globalTeardown;

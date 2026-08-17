@@ -1,0 +1,20 @@
+import { mergeTests } from '@playwright/test';
+import { componentFixtures } from '@fixtures/componentFixtures';
+import { pageFixtures } from '@fixtures/pageFixtures';
+import { apiFixtures } from '@fixtures/apiFixtures';
+import { customFixtures } from '@fixtures/fixtures';
+import { a11yFixture } from '@fixtures/a11yFixture';
+import { dataFactoryFixture } from '@fixtures/dataFactoryFixture';
+import { telemetryFixture } from '@fixtures/telemetryFixture';
+
+export const test = mergeTests(
+  componentFixtures,
+  pageFixtures,
+  apiFixtures,
+  customFixtures,
+  a11yFixture,
+  dataFactoryFixture,
+  telemetryFixture
+);
+
+export { expect } from '@playwright/test';

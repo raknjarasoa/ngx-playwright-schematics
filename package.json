@@ -1,0 +1,49 @@
+{
+  "name": "ngx-playwright-schematics",
+  "version": "1.0.0",
+  "description": "Enterprise Angular Schematics for Playwright E2E testing architecture, Component Object Model, fixture slices, and API contract drift validation",
+  "main": "./dist/ng-add/index.js",
+  "types": "./dist/ng-add/index.d.ts",
+  "schematics": "./collection.json",
+  "files": [
+    "dist",
+    "collection.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "ng-add": {
+    "save": "devDependencies"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsx scripts/copy-assets.ts",
+    "sync": "tsx scripts/sync-templates.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test && npm run build"
+  },
+  "keywords": [
+    "angular",
+    "schematics",
+    "playwright",
+    "e2e",
+    "testing",
+    "enterprise",
+    "ngx",
+    "blueprint"
+  ],
+  "author": "Rakotoarisoa",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@angular-devkit/architect": ">= 0.2100.0 < 0.2200.0",
+    "@angular-devkit/core": "^21.0.0",
+    "@angular-devkit/schematics": "^21.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

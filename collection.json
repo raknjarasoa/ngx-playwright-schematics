@@ -1,0 +1,15 @@
+{
+  "$schema": "../node_modules/@angular-devkit/schematics/collection-schema.json",
+  "schematics": {
+    "ng-add": {
+      "description": "Adds enterprise Playwright E2E testing architecture and blueprint to your Angular project",
+      "factory": "./dist/ng-add/index#ngAdd",
+      "schema": "./dist/ng-add/schema.json"
+    },
+    "blueprint": {
+      "description": "Scaffolds complete Playwright E2E Blueprint files and configurations",
+      "factory": "./dist/blueprint/index#blueprint",
+      "schema": "./dist/ng-add/schema.json"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { parsePlaywrightResults, passRate } from './lib/parseResults';
+
+export class MarkdownSummaryGenerator {
+  private rootDir = process.cwd();
+  private resultsPath = join(this.rootDir, 'artifacts', 'results.json');
+  private reportPath = join(this.rootDir, 'artifacts', 'test-insights-report.md');
+
+  generateSummary(): void {
+    console.log('📈 Generating Test Markdown Summary...');
+    if (!existsSync(this.resultsPath)) {
+      console.log('⚠️ No results.json file found to generate summary.');
+      return;
+    }
+
+    try {
+      const results = JSON.parse(readFileSync(this.resultsPath, 'utf-8'));
+      const summary = parsePlaywrightResults(results);
+      const { passed, failed, flaky, skipped, total, durationMs } = summary;
+      const cleanPassRate = passRate(summary).toFixed(1);
+
+      const markdown = `# 🧪 Enterprise E2E Test Execution Insights
+
+- **Generated**: ${new Date().toLocaleString()}
+- **Total Tests**: ${total}
+- **Passed**: ${passed} ✅
+- **Flaky (Passed on Retry)**: ${flaky} ⚠️
+- **Failed**: ${failed} ❌
+- **Skipped**: ${skipped} ⏭️
+- **First-Attempt Pass Rate**: **${cleanPassRate}%**
+- **Total Execution Duration**: ${(durationMs / 1000).toFixed(2)} seconds
+
+## Status Summary
+${
+  failed === 0
+    ? flaky > 0
+      ? '⚠️ All test specs passed, but some flakiness was detected during retries.'
+      : '🎉 All test specs passed cleanly on the first attempt!'
+    : '❌ Failures detected. Please inspect artifacts/playwright-report for traces and videos.'
+}
+`;
+
+      writeFileSync(this.reportPath, markdown);
+      console.log(`✅ Markdown summary generated at ${this.reportPath}`);
+    } catch (err) {
+      console.error('Error generating markdown summary:', err);
+    }
+  }
+}
+
+new MarkdownSummaryGenerator().generateSummary();

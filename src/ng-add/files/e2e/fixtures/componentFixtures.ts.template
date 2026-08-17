@@ -1,0 +1,19 @@
+import { test as base } from '@playwright/test';
+import { ToastComponent } from '@components/toast.component';
+import { LoaderComponent } from '@components/loader.component';
+import { HeaderComponent } from '@components/header.component';
+import { ModalComponent } from '@components/modal.component';
+
+export type ComponentFixtures = {
+  toastComponent: ToastComponent;
+  loaderComponent: LoaderComponent;
+  headerComponent: HeaderComponent;
+  modalComponent: ModalComponent;
+};
+
+export const componentFixtures = base.extend<ComponentFixtures>({
+  toastComponent: async ({ page }, use) => await use(new ToastComponent(page)),
+  loaderComponent: async ({ page }, use) => await use(new LoaderComponent(page)),
+  headerComponent: async ({ page }, use) => await use(new HeaderComponent(page)),
+  modalComponent: async ({ page }, use) => await use(new ModalComponent(page)),
+});

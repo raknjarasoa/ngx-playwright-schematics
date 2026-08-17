@@ -1,0 +1,38 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+import Routes from '@pages/routes';
+import { UserCredentials } from '@fixtures/creds';
+
+export default class LoginPage {
+  private readonly page: Page;
+  readonly routes: Routes;
+  readonly emailInput: Locator;
+  readonly passwordInput: Locator;
+  readonly submitButton: Locator;
+
+  constructor(page: Page) {
+    this.page = page;
+    this.routes = new Routes(page);
+    this.emailInput = this.page.getByRole('textbox', { name: /email/i }).or(this.page.getByLabel(/email/i)).or(this.page.locator('input[type="email"], input[name="email"]'));
+    this.passwordInput = this.page.getByLabel(/password/i).or(this.page.locator('input[type="password"], input[name="password"]'));
+    this.submitButton = this.page.getByRole('button', { name: /login|sign in/i });
+  }
+
+  async visit(): Promise<void> {
+    await test.step('Navigate to login page', async () => {
+      await this.routes.navigateTo('login');
+      await this.page.waitForLoadState('domcontentloaded');
+    });
+  }
+
+  async login(credentials: UserCredentials): Promise<void> {
+    await test.step(`Login with user: ${credentials.email}`, async () => {
+      await expect(this.emailInput, 'Verify login email field is visible').toBeVisible();
+      await this.emailInput.fill(credentials.email);
+      if (credentials.password) {
+        await expect(this.passwordInput, 'Verify login password field is visible').toBeVisible();
+        await this.passwordInput.fill(credentials.password);
+      }
+      await this.submitButton.click();
+    });
+  }
+}

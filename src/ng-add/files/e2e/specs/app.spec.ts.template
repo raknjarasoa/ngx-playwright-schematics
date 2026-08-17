@@ -1,0 +1,27 @@
+import { test, expect } from '@fixtures/index';
+
+test.describe('Angular With Playwright Application Specs', () => {
+  test(
+    'should render application title and main heading',
+    {
+      tag: ['@smoke', '@regression', '@ui'],
+    },
+    async ({ homePage, toastComponent, appTitle }) => {
+      await homePage.visit('/');
+      await homePage.verifyHomePageLoaded(appTitle);
+      await toastComponent.checkNoErrorToast();
+    }
+  );
+
+  test(
+    'should verify navigation routes and page title',
+    {
+      tag: ['@regression', '@ui'],
+    },
+    async ({ homePage, routes, appTitleDisplay }) => {
+      await routes.navigateTo('home');
+      const title = await homePage.getTitle();
+      expect(title).toContain(appTitleDisplay);
+    }
+  );
+});

@@ -1,0 +1,26 @@
+import { test as base } from '@playwright/test';
+import { randomBytes } from 'crypto';
+
+export type TelemetryFixtures = {
+  traceId: string;
+};
+
+export const telemetryFixture = base.extend<TelemetryFixtures>({
+  traceId: async ({ page }, use, testInfo) => {
+    const traceId = randomBytes(16).toString('hex');
+    const spanId = randomBytes(8).toString('hex');
+    const traceparent = `00-${traceId}-${spanId}-01`;
+
+    await page.route('**/api/**', async (route) => {
+      const headers = {
+        ...route.request().headers(),
+        traceparent,
+        'x-e2e-test-title': encodeURIComponent(testInfo.title),
+        'x-e2e-worker-index': `${testInfo.workerIndex}`,
+      };
+      await route.continue({ headers });
+    });
+
+    await use(traceId);
+  },
+});

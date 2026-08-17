@@ -1,0 +1,10 @@
+import { FullConfig } from '@playwright/test';
+import dotenv from 'dotenv';
+
+async function globalSetup(_config: FullConfig) {
+  dotenv.config();
+  console.log('🚀 Starting Global Setup for E2E Tests...');
+  console.log(`Target Base URL: ${process.env['BASE_URL'] || _config.projects[0]?.use.baseURL || 'http://localhost:4200'}`);
+}
+
+export default globalSetup;

@@ -1,0 +1,113 @@
+/**
+ * Shared parser for the Playwright JSON reporter output (`artifacts/results.json`).
+ *
+ * This logic used to be duplicated verbatim in html-reporter.ts, markdown-summary.ts and
+ * metrics-recorder.ts. Keep it here so the three reports can never disagree about what
+ * "flaky" or "duration" means.
+ */
+
+export type TestStatus = 'passed' | 'flaky' | 'failed' | 'skipped';
+
+export interface TestOutcome {
+  /** Spec title plus the project it ran under, e.g. "renders title > Chrome". */
+  title: string;
+  /** Total wall time across every attempt, in milliseconds. */
+  duration: number;
+  status: TestStatus;
+}
+
+export interface ResultsSummary {
+  passed: number;
+  /** Failed at least once, then passed on a retry. */
+  flaky: number;
+  failed: number;
+  skipped: number;
+  total: number;
+  /** Sum of every attempt of every test, in milliseconds. */
+  durationMs: number;
+  tests: TestOutcome[];
+}
+
+/**
+ * Classifies a single test entry from the JSON reporter.
+ * The last attempt decides the outcome; more than one attempt with a final pass means flaky.
+ */
+function classify(attempts: any[]): TestStatus {
+  const last = attempts[attempts.length - 1];
+  if (last?.status === 'passed') {
+    return attempts.length > 1 ? 'flaky' : 'passed';
+  }
+  if (last?.status === 'failed' || last?.status === 'timedOut') {
+    return 'failed';
+  }
+  return 'skipped';
+}
+
+/**
+ * Walks the nested suite tree of a parsed results.json and produces a flat summary.
+ * Tests with no recorded attempts are ignored, matching the previous behaviour.
+ */
+export function parsePlaywrightResults(results: any): ResultsSummary {
+  const tests: TestOutcome[] = [];
+
+  const processSpec = (spec: any) => {
+    if (!spec.tests) return;
+    spec.tests.forEach((testItem: any) => {
+      const attempts: any[] = testItem.results || [];
+      if (attempts.length === 0) return;
+
+      tests.push({
+        title: `${spec.title} > ${testItem.projectName || 'default'}`,
+        duration: attempts.reduce((acc: number, cur: any) => acc + (cur.duration || 0), 0),
+        status: classify(attempts),
+      });
+    });
+  };
+
+  const processSuite = (suite: any) => {
+    if (suite.specs) suite.specs.forEach(processSpec);
+    if (suite.suites) suite.suites.forEach(processSuite);
+  };
+
+  if (results?.suites) results.suites.forEach(processSuite);
+
+  const count = (status: TestStatus) => tests.filter((t) => t.status === status).length;
+
+  return {
+    passed: count('passed'),
+    flaky: count('flaky'),
+    failed: count('failed'),
+    skipped: count('skipped'),
+    total: tests.length,
+    durationMs: tests.reduce((acc, t) => acc + t.duration, 0),
+    tests,
+  };
+}
+
+/**
+ * Share of tests that passed on their first attempt. Flaky tests are deliberately excluded —
+ * counting them as passing would let a fully flaky suite report 100%, which defeats the point
+ * of tracking flakiness at all. Report `flaky` alongside this, not folded into it.
+ */
+export function passRate(summary: ResultsSummary): number {
+  if (summary.total === 0) return 0;
+  return (summary.passed / summary.total) * 100;
+}
+
+/**
+ * Nearest-rank percentile. `p` is a fraction, e.g. 0.95 for P95.
+ * Uses ceil(n*p)-1 rather than floor(n*p), which overshoots by one whenever n*p lands on an
+ * exact integer (n = 20, 40, 60 ...) and would report the maximum instead of the percentile.
+ */
+export function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const rank = Math.ceil(sorted.length * p);
+  const index = Math.min(Math.max(rank - 1, 0), sorted.length - 1);
+  return sorted[index] ?? 0;
+}
+
+/** The N slowest tests, longest first. */
+export function slowestTests(summary: ResultsSummary, limit = 5): TestOutcome[] {
+  return [...summary.tests].sort((a, b) => b.duration - a.duration).slice(0, limit);
+}

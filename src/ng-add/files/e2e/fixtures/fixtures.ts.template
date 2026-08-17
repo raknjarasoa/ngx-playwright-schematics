@@ -1,0 +1,20 @@
+import { test as baseTest } from '@playwright/test';
+import { APP_TITLE, APP_TITLE_DISPLAY } from './constants';
+
+export type CustomTestData = {
+  defaultUserRole: string;
+  appTitle: string;
+  appTitleDisplay: string;
+};
+
+export const customFixtures = baseTest.extend<CustomTestData>({
+  defaultUserRole: async ({}, use) => {
+    await use('default');
+  },
+  appTitle: async ({}, use) => {
+    await use(APP_TITLE);
+  },
+  appTitleDisplay: async ({}, use) => {
+    await use(APP_TITLE_DISPLAY);
+  },
+});

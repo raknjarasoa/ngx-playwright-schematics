@@ -1,0 +1,121 @@
+name: Enterprise Playwright Matrix E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Code Quality & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:e2e
+      - run: npm test
+
+  test:
+    name: Shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+    needs: [validate]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright Browser Binaries
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright Browsers & OS Dependencies (Cache Miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Install Linux OS Dependencies (Cache Hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium firefox
+
+      - name: Run Sharded E2E Tests
+        env:
+          CI: 'true'
+          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL || 'admin@example.com' }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD || 'Password123!' }}
+        run: |
+          npx playwright test \
+            --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} \
+            --reporter=blob
+
+      - name: Upload Shard Blob (Isolated Artifact Name)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-reports-shard-${{ matrix.shardIndex }}
+          path: blob-report
+          retention-days: 1
+
+  merge-reports:
+    name: Merge Reports & Publish Dashboard
+    if: ${{ !cancelled() }}
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Download all blob reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: blob-reports-shard-*
+          path: all-blobs
+          merge-multiple: true
+
+      - name: Merge Playwright Reports
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: artifacts/results.json
+          PLAYWRIGHT_HTML_REPORT: artifacts/playwright-report
+        run: |
+          mkdir -p artifacts
+          npx playwright merge-reports \
+            --reporter html,json,junit \
+            all-blobs
+
+      - name: Generate Insights & Dashboard
+        run: npm run insights:all
+
+      - name: Publish GitHub Step Summary
+        run: cat artifacts/test-insights-report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Unified Test Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: unified-e2e-artifacts
+          path: artifacts/
+          retention-days: 14

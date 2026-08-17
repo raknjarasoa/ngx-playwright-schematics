@@ -1,0 +1,104 @@
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { DateTime } from 'luxon';
+import {
+  parsePlaywrightResults,
+  percentile,
+  slowestTests,
+  type TestOutcome,
+} from './lib/parseResults';
+
+type SlowTestInfo = Pick<TestOutcome, 'title' | 'duration'>;
+
+interface ExecutionRunMetrics {
+  timestamp: string;
+  workflow: string;
+  suite: string;
+  results: {
+    passed: number;
+    failed: number;
+    flaky: number;
+    skipped: number;
+    duration: number;
+    total: number;
+  };
+  performance: {
+    slowestTests: SlowTestInfo[];
+    p95Duration: number;
+  };
+  environment: string;
+}
+
+export class MetricsRecorder {
+  private rootDir = process.cwd();
+  private resultsPath = join(this.rootDir, 'artifacts', 'results.json');
+  private metricsPath = join(this.rootDir, 'artifacts', 'daily-test-metrics.json');
+
+  async recordMetrics(workflowName: string, suite: string): Promise<void> {
+    console.log(`📊 Recording metrics for ${workflowName} - ${suite}`);
+    const metrics = await this.extractResults(workflowName, suite);
+
+    if (metrics) {
+      await this.saveMetrics(metrics);
+      console.log(
+        `✅ Metrics recorded: ${metrics.results.total} tests, ${metrics.results.passed} passed, ${metrics.results.flaky} flaky, ${metrics.results.failed} failed`
+      );
+    } else {
+      console.log(`⚠️  No test results found at ${this.resultsPath}`);
+    }
+  }
+
+  private async extractResults(workflowName: string, suite: string): Promise<ExecutionRunMetrics | null> {
+    try {
+      if (!existsSync(this.resultsPath)) {
+        return null;
+      }
+
+      const results = JSON.parse(readFileSync(this.resultsPath, 'utf-8'));
+      const summary = parsePlaywrightResults(results);
+      const { passed, failed, flaky, skipped, total, durationMs } = summary;
+
+      if (total === 0) return null;
+
+      const p95Duration = percentile(
+        summary.tests.map((t) => t.duration),
+        0.95
+      );
+
+      return {
+        timestamp: DateTime.now().toISO() || new Date().toISOString(),
+        workflow: workflowName,
+        suite,
+        results: { passed, failed, flaky, skipped, duration: durationMs, total },
+        performance: {
+          // Map explicitly so the persisted shape stays {title, duration} only.
+          slowestTests: slowestTests(summary, 5).map(({ title, duration }) => ({ title, duration })),
+          p95Duration,
+        },
+        environment: process.env['TEST_ENV'] || 'local',
+      };
+    } catch (error) {
+      console.error('Error extracting test results:', error);
+      return null;
+    }
+  }
+
+  private async saveMetrics(metrics: ExecutionRunMetrics): Promise<void> {
+    try {
+      let existingMetrics: ExecutionRunMetrics[] = [];
+      if (existsSync(this.metricsPath)) {
+        existingMetrics = JSON.parse(readFileSync(this.metricsPath, 'utf-8'));
+      }
+      existingMetrics.push(metrics);
+      writeFileSync(this.metricsPath, JSON.stringify(existingMetrics, null, 2));
+      console.log(`📝 Metrics saved to ${this.metricsPath}`);
+    } catch (error) {
+      console.error('Error saving metrics:', error);
+    }
+  }
+}
+
+const args = process.argv.slice(2);
+const workflowName = args[0] || process.env['GITHUB_WORKFLOW'] || 'Local E2E Execution';
+const suite = args[1] || process.env['TEST_SUITE'] || 'all';
+new MetricsRecorder().recordMetrics(workflowName, suite).catch(console.error);

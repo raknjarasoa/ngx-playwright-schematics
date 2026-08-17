@@ -1,0 +1,43 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+import Routes from '@pages/routes';
+import { APP_TITLE } from '@fixtures/constants';
+
+export default class HomePage {
+  private readonly page: Page;
+  readonly routes: Routes;
+  readonly heading: Locator;
+  readonly logo: Locator;
+  readonly docsLink: Locator;
+
+  constructor(page: Page) {
+    this.page = page;
+    this.routes = new Routes(page);
+    this.heading = this.page.getByRole('heading', { level: 1 });
+    this.logo = this.page.locator('.angular-logo, svg');
+    this.docsLink = this.page.getByRole('link', { name: 'Explore the Docs' });
+  }
+
+  async visit(path: string = '/'): Promise<void> {
+    await test.step(`Navigate to path: ${path}`, async () => {
+      await this.page.goto(path);
+      await this.page.waitForLoadState('domcontentloaded');
+    });
+  }
+
+  async verifyHomePageLoaded(expectedTitleSubstring: string = APP_TITLE): Promise<void> {
+    await test.step('Verify Home Page elements and content', async () => {
+      await expect(this.heading).toBeVisible();
+      await expect(this.heading).toContainText(expectedTitleSubstring);
+    });
+  }
+
+  async clickDocsLink(): Promise<void> {
+    await test.step('Click Explore the Docs link', async () => {
+      await this.docsLink.click();
+    });
+  }
+
+  async getTitle(): Promise<string> {
+    return await this.page.title();
+  }
+}

@@ -1,0 +1,19 @@
+import { test, expect } from '@fixtures/index';
+
+test.describe('Visual Snapshot Regression Suite', () => {
+  test(
+    'should match home page layout screenshot',
+    {
+      tag: ['@visual', '@regression'],
+    },
+    async ({ page, homePage }) => {
+      await homePage.visit('/');
+      await homePage.verifyHomePageLoaded();
+
+      await expect(page).toHaveScreenshot('home-page-layout.png', {
+        maxDiffPixelRatio: 0.05,
+        mask: [page.locator('.dynamic-timestamp, [data-test="timestamp"]')],
+      });
+    }
+  );
+});
