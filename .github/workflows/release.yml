@@ -14,13 +14,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
-      - run: npm publish --access public --provenance
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build package & bundle assets
+        run: npm run build
+
+      - name: Publish to NPM via OIDC Trusted Publishing
+        run: npm publish --access public --provenance
         env:
+          # If using OIDC Trusted Publishing, npm authenticates directly via GitHub OIDC.
+          # NODE_AUTH_TOKEN is only used as an optional fallback.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
