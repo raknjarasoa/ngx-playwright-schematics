@@ -1,6 +1,8 @@
 name: Publish to NPM
 
 on:
+  push:
+    branches: [main]
   release:
     types: [created, published]
   workflow_dispatch:
@@ -29,9 +31,23 @@ jobs:
       - name: Build package & bundle assets
         run: npm run build
 
+      - name: Check if version needs publishing
+        id: check-version
+        run: |
+          LOCAL_VERSION=$(node -p "require('./package.json').version")
+          NPM_VERSION=$(npm view ngx-playwright-schematics version 2>/dev/null || echo "0.0.0")
+          echo "Local version: $LOCAL_VERSION"
+          echo "NPM version:   $NPM_VERSION"
+          if [ "$LOCAL_VERSION" != "$NPM_VERSION" ]; then
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+            echo "🚀 New version detected ($LOCAL_VERSION). Publishing to NPM..."
+          else
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Version $LOCAL_VERSION is already published on NPM. Skipping publish."
+          fi
+
       - name: Publish to NPM via OIDC Trusted Publishing
+        if: steps.check-version.outputs.should_publish == 'true'
         run: npm publish --access public --provenance
         env:
-          # If using OIDC Trusted Publishing, npm authenticates directly via GitHub OIDC.
-          # NODE_AUTH_TOKEN is only used as an optional fallback.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
