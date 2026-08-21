@@ -22,6 +22,12 @@ jobs:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
 
+      # Trusted Publishing (OIDC) requires npm >= 11.5.1; Node 22 still ships npm 10.x.
+      - name: Upgrade npm for Trusted Publishing support
+        run: |
+          npm install -g npm@latest
+          npm --version
+
       - name: Install dependencies
         run: npm ci
 
@@ -46,8 +52,9 @@ jobs:
             echo "ℹ️ Version $LOCAL_VERSION is already published on NPM. Skipping publish."
           fi
 
+      # No NODE_AUTH_TOKEN on purpose: a token in the environment takes precedence
+      # over OIDC, and the classic NPM_TOKEN is 2FA-gated (npm error code EOTP).
+      # Provenance is derived from the same OIDC identity.
       - name: Publish to NPM via OIDC Trusted Publishing
         if: steps.check-version.outputs.should_publish == 'true'
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
