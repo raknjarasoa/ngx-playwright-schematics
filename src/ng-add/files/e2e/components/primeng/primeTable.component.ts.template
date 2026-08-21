@@ -1,0 +1,100 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+
+/**
+ * Component Object for PrimeNG Table (`p-table` / `.p-datatable`).
+ *
+ * Supports sorting, global filtering, column filtering, row selection,
+ * pagination controls, and cell assertions.
+ */
+export class PrimeTableComponent {
+  readonly root: Locator;
+  readonly headerRow: Locator;
+  readonly headerCells: Locator;
+  readonly body: Locator;
+  readonly rows: Locator;
+  readonly paginator: Locator;
+  readonly globalFilterInput: Locator;
+  readonly loadingOverlay: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator?: Locator,
+  ) {
+    this.root = rootLocator || page.locator('.p-datatable, p-table').first();
+    this.headerRow = this.root.locator('.p-datatable-thead > tr, thead > tr');
+    this.headerCells = this.root.locator('.p-datatable-thead th, thead th, [role="columnheader"]');
+    this.body = this.root.locator('.p-datatable-tbody, tbody');
+    this.rows = this.root.locator('.p-datatable-tbody > tr:not(.p-datatable-emptymessage), tbody > tr:not(.p-datatable-emptymessage)');
+    this.paginator = this.root.locator('.p-paginator');
+    this.globalFilterInput = this.root.locator('.p-datatable-header input[type="text"], input[placeholder*="search" i]');
+    this.loadingOverlay = this.root.locator('.p-datatable-loading-overlay, .p-datatable-mask');
+  }
+
+  async waitForLoaded(): Promise<void> {
+    await test.step('Wait for PrimeNG Table loading overlay to settle', async () => {
+      await expect(this.loadingOverlay).toBeHidden();
+      await expect(this.root).toBeVisible();
+    });
+  }
+
+  async sortByColumn(columnHeader: string | RegExp): Promise<void> {
+    await test.step(`Sort table by column "${columnHeader}"`, async () => {
+      const header = this.headerCells.filter({ hasText: columnHeader }).first();
+      await expect(header, `Verify column header "${columnHeader}" is visible`).toBeVisible();
+      await header.click();
+      await this.waitForLoaded();
+    });
+  }
+
+  async filterGlobal(searchTerm: string): Promise<void> {
+    await test.step(`Filter PrimeNG table globally for "${searchTerm}"`, async () => {
+      await expect(this.globalFilterInput, 'Verify table global search input is visible').toBeVisible();
+      await this.globalFilterInput.fill(searchTerm);
+      await this.waitForLoaded();
+    });
+  }
+
+  getRow(index: number): Locator {
+    return this.rows.nth(index);
+  }
+
+  getRowByText(text: string | RegExp): Locator {
+    return this.rows.filter({ hasText: text }).first();
+  }
+
+  async getCellText(rowIndex: number, colIndex: number): Promise<string> {
+    const row = this.getRow(rowIndex);
+    const cell = row.locator('td').nth(colIndex);
+    return (await cell.textContent())?.trim() || '';
+  }
+
+  async selectRow(textOrIndex: string | RegExp | number): Promise<void> {
+    await test.step(`Select table row: ${textOrIndex}`, async () => {
+      const row = typeof textOrIndex === 'number' ? this.getRow(textOrIndex) : this.getRowByText(textOrIndex);
+      await expect(row, 'Verify target row is visible').toBeVisible();
+      await row.click();
+    });
+  }
+
+  async goToNextPage(): Promise<void> {
+    await test.step('Navigate to next table page in paginator', async () => {
+      const nextBtn = this.paginator.locator('.p-paginator-next, button[aria-label="Next Page"]');
+      await expect(nextBtn).toBeEnabled();
+      await nextBtn.click();
+      await this.waitForLoaded();
+    });
+  }
+
+  async expectRowCount(expectedCount: number): Promise<void> {
+    await test.step(`Verify table has ${expectedCount} rows`, async () => {
+      await expect(this.rows).toHaveCount(expectedCount);
+    });
+  }
+
+  async expectEmpty(): Promise<void> {
+    await test.step('Verify table displays empty state message', async () => {
+      const emptyRow = this.root.locator('.p-datatable-emptymessage');
+      await expect(emptyRow).toBeVisible();
+    });
+  }
+}

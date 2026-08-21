@@ -1,0 +1,88 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+
+/**
+ * Component Object for PrimeNG Dropdown (`p-dropdown` / `p-select`).
+ *
+ * Handles both inline and portaled (`appendTo="body"`) dropdown panels,
+ * searchable filter inputs, clear icons, and selection states.
+ */
+export class PrimeDropdownComponent {
+  readonly root: Locator;
+  readonly trigger: Locator;
+  readonly label: Locator;
+  readonly clearIcon: Locator;
+  readonly overlay: Locator;
+  readonly filterInput: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator: Locator,
+  ) {
+    this.root = rootLocator;
+    this.trigger = this.root
+      .getByRole('combobox')
+      .or(this.root.locator('.p-dropdown-trigger, .p-select-dropdown, .p-dropdown, .p-select'))
+      .first();
+    this.label = this.root.locator('.p-dropdown-label, .p-select-label');
+    this.clearIcon = this.root.locator('.p-dropdown-clear-icon, .p-select-clear-icon');
+
+    // Overlays portal to <body> by default in PrimeNG
+    this.overlay = page
+      .locator('.p-dropdown-panel, .p-select-overlay, .p-connected-overlay')
+      .filter({ hasNot: page.locator('.p-hidden') });
+    this.filterInput = this.overlay.locator('.p-dropdown-filter, .p-select-filter, input[type="text"]');
+  }
+
+  async open(): Promise<void> {
+    await test.step('Open PrimeNG dropdown', async () => {
+      await expect(this.root, 'Verify dropdown is visible').toBeVisible();
+      await this.root.click();
+      await expect(this.overlay.first(), 'Verify dropdown overlay panel is open').toBeVisible();
+    });
+  }
+
+  async selectOption(optionText: string | RegExp): Promise<void> {
+    await test.step(`Select option "${optionText}" from PrimeNG dropdown`, async () => {
+      await this.open();
+
+      const option = this.overlay
+        .getByRole('option', { name: optionText })
+        .or(this.overlay.locator('.p-dropdown-item, .p-select-option').filter({ hasText: optionText }))
+        .first();
+
+      await expect(option, `Verify option "${optionText}" is visible in overlay`).toBeVisible();
+      await option.click();
+    });
+  }
+
+  async filterAndSelect(searchTerm: string, optionText?: string | RegExp): Promise<void> {
+    await test.step(`Filter dropdown for "${searchTerm}" and select option`, async () => {
+      await this.open();
+      await expect(this.filterInput, 'Verify dropdown search filter input is visible').toBeVisible();
+      await this.filterInput.fill(searchTerm);
+
+      const targetText = optionText || searchTerm;
+      const option = this.overlay
+        .getByRole('option', { name: targetText })
+        .or(this.overlay.locator('.p-dropdown-item, .p-select-option').filter({ hasText: targetText }))
+        .first();
+
+      await expect(option, `Verify filtered option "${targetText}" is visible`).toBeVisible();
+      await option.click();
+    });
+  }
+
+  async clear(): Promise<void> {
+    await test.step('Clear PrimeNG dropdown selection', async () => {
+      await expect(this.clearIcon, 'Verify dropdown clear icon is visible').toBeVisible();
+      await this.clearIcon.click();
+    });
+  }
+
+  async expectSelectedValue(expectedText: string | RegExp): Promise<void> {
+    await test.step(`Verify selected value in dropdown matches "${expectedText}"`, async () => {
+      await expect(this.label).toBeVisible();
+      await expect(this.label).toHaveText(expectedText);
+    });
+  }
+}

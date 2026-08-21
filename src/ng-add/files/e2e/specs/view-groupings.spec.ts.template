@@ -1,0 +1,57 @@
+import { test, expect } from '@fixtures/index';
+
+test.describe('View Page - Groupings Feature Specification', () => {
+  test.beforeEach(async ({ viewPage }) => {
+    await viewPage.visit('/view');
+  });
+
+  test(
+    'should open groupings modal, search column, and apply groupings to the table',
+    {
+      tag: ['@smoke', '@regression', '@ui'],
+    },
+    async ({ viewPage }) => {
+      // 1. Open groupings modal via the Groupings button
+      await viewPage.openGroupingsModal();
+
+      // 2. Search for a specific column in the modal
+      await viewPage.groupingsModal.searchColumn('Country');
+
+      // 3. Drag & drop or move the column into active groupings
+      await viewPage.groupingsModal.dragAndDropColumn('Country');
+
+      // 4. Apply groupings and verify modal closes
+      await viewPage.groupingsModal.apply();
+
+      // 5. Verify the data table below the button updates to reflect the grouping
+      await viewPage.verifyTableVisible();
+      await viewPage.verifyTableGroupedBy('Country');
+    }
+  );
+
+  test(
+    'should reset active column groupings back to initial state',
+    {
+      tag: ['@regression', '@ui'],
+    },
+    async ({ viewPage }) => {
+      await viewPage.openGroupingsModal();
+      await viewPage.groupingsModal.dragAndDropColumn('Department');
+      await viewPage.groupingsModal.reset();
+      await viewPage.groupingsModal.apply();
+      await viewPage.verifyTableVisible();
+    }
+  );
+
+  test(
+    'should dismiss groupings modal when clicking close without applying changes',
+    {
+      tag: ['@regression', '@ui'],
+    },
+    async ({ viewPage }) => {
+      await viewPage.openGroupingsModal();
+      await viewPage.groupingsModal.close();
+      await viewPage.groupingsModal.expectClosed();
+    }
+  );
+});

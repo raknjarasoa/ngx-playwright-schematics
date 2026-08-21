@@ -1,0 +1,125 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+import { ModalComponent } from '@components/modal.component';
+
+/**
+ * The configuration dialog a cockpit widget opens from its header.
+ *
+ * Chrome (root, title, close, visibility) is delegated to a composed {@link ModalComponent},
+ * exactly as {@link GroupingsModalComponent} does; this class adds only the settings controls.
+ */
+export class WidgetSettingsModalComponent {
+  readonly modal: ModalComponent;
+  readonly root: Locator;
+  readonly datasourceSelect: Locator;
+  readonly metricSelect: Locator;
+  readonly saveButton: Locator;
+
+  constructor(page: Page, rootLocator?: Locator) {
+    const root =
+      rootLocator ||
+      page
+        .getByRole('dialog', { name: /widget settings|configuration/i })
+        .or(page.locator('[data-test="widget-settings-modal"]'));
+
+    this.modal = new ModalComponent(page, root);
+    this.root = this.modal.root;
+
+    this.datasourceSelect = this.root
+      .getByRole('combobox', { name: /datasource|source de données/i })
+      .or(this.root.locator('[data-test="widget-datasource-select"]'));
+    this.metricSelect = this.root
+      .getByRole('combobox', { name: /metric|mesure/i })
+      .or(this.root.locator('[data-test="widget-metric-select"]'));
+    this.saveButton = this.root
+      .getByRole('button', { name: /save|enregistrer/i })
+      .or(this.root.locator('[data-test="save-widget-settings-btn"]'));
+  }
+
+  async expectVisible(): Promise<void> {
+    await this.modal.expectVisible();
+  }
+
+  async configure(datasource: string, metric?: string): Promise<void> {
+    await test.step(`Configure widget (datasource: "${datasource}")`, async () => {
+      await this.datasourceSelect.selectOption(datasource);
+      if (metric) {
+        await this.metricSelect.selectOption(metric);
+      }
+      await this.saveButton.click();
+      await this.modal.expectClosed();
+    });
+  }
+}
+
+/**
+ * Generic cockpit widget shell — the chrome every widget shares regardless of its payload:
+ * title bar, header actions, and the body slot the payload renders into.
+ *
+ * Specialized widgets **compose** this and scope their own locators to `container.body`; they
+ * never re-declare the header controls. `rootLocator` is required here because a cockpit shows
+ * many widgets at once, so there is no meaningful page-wide default.
+ *
+ * NOTE: this suite's sandbox app ships no cockpit, so these selectors are illustrative and are
+ * not exercised by any spec here. Align the `[data-test]` hooks with your app on first use.
+ */
+export class WidgetContainerComponent {
+  readonly root: Locator;
+  readonly title: Locator;
+  readonly body: Locator;
+  readonly refreshButton: Locator;
+  readonly settingsButton: Locator;
+  readonly minimizeButton: Locator;
+  readonly deleteButton: Locator;
+  readonly errorState: Locator;
+  readonly settingsModal: WidgetSettingsModalComponent;
+
+  constructor(page: Page, rootLocator: Locator) {
+    this.root = rootLocator;
+    this.title = this.root.locator('[data-test="widget-title"], .widget-header h3');
+    this.body = this.root.locator('[data-test="widget-body"], .widget-content');
+    this.refreshButton = this.root.locator(
+      '[data-test="widget-refresh-btn"], button[aria-label="Refresh"]',
+    );
+    this.settingsButton = this.root.locator(
+      '[data-test="widget-settings-btn"], button[aria-label="Settings"]',
+    );
+    this.minimizeButton = this.root.locator(
+      '[data-test="widget-minimize-btn"], button[aria-label="Minimize"]',
+    );
+    this.deleteButton = this.root.locator(
+      '[data-test="widget-delete-btn"], button[aria-label="Delete"]',
+    );
+    this.errorState = this.root.locator('[data-test="widget-error-state"], .widget-error');
+
+    // The settings dialog is a page-level portal, not a descendant of the widget root.
+    this.settingsModal = new WidgetSettingsModalComponent(page);
+  }
+
+  async openSettings(): Promise<void> {
+    await test.step('Open widget settings dialog', async () => {
+      await this.settingsButton.click();
+      await this.settingsModal.expectVisible();
+    });
+  }
+
+  async refresh(): Promise<void> {
+    await test.step('Refresh widget data', async () => {
+      await this.refreshButton.click();
+    });
+  }
+
+  async expectTitle(expected: string | RegExp): Promise<void> {
+    await test.step(`Verify widget title matches "${expected}"`, async () => {
+      await expect(this.title).toHaveText(expected);
+    });
+  }
+
+  async expectError(expected?: string | RegExp): Promise<void> {
+    await test.step('Verify widget shows its error state', async () => {
+      await expect(this.errorState).toBeVisible();
+      if (expected) {
+        await expect(this.errorState).toContainText(expected);
+      }
+    });
+  }
+}

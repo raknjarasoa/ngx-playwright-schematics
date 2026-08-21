@@ -1,0 +1,69 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+
+/**
+ * Component Object for PrimeNG DatePicker / Calendar (`p-calendar` / `p-datepicker`).
+ *
+ * Handles date input typing, opening portaled calendar overlay, month/year navigation,
+ * and day selection.
+ */
+export class PrimeDatePickerComponent {
+  readonly root: Locator;
+  readonly input: Locator;
+  readonly overlay: Locator;
+  readonly prevMonthButton: Locator;
+  readonly nextMonthButton: Locator;
+  readonly monthTitle: Locator;
+  readonly yearTitle: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator: Locator,
+  ) {
+    this.root = rootLocator;
+    this.input = this.root.locator('input.p-inputtext, input');
+
+    // Calendar overlay portaled to body
+    this.overlay = page
+      .locator('.p-datepicker, .p-calendar-panel, .p-connected-overlay')
+      .filter({ hasNot: page.locator('.p-hidden') });
+    this.prevMonthButton = this.overlay.locator('.p-datepicker-prev, button[aria-label="Previous Month"]');
+    this.nextMonthButton = this.overlay.locator('.p-datepicker-next, button[aria-label="Next Month"]');
+    this.monthTitle = this.overlay.locator('.p-datepicker-month');
+    this.yearTitle = this.overlay.locator('.p-datepicker-year');
+  }
+
+  async setDateByTyping(dateString: string): Promise<void> {
+    await test.step(`Set date "${dateString}" by direct typing`, async () => {
+      await expect(this.input, 'Verify datepicker input is visible').toBeVisible();
+      await this.input.fill(dateString);
+      await this.input.press('Enter');
+    });
+  }
+
+  async open(): Promise<void> {
+    await test.step('Open PrimeNG calendar overlay', async () => {
+      await expect(this.input, 'Verify datepicker input is visible').toBeVisible();
+      await this.input.click();
+      await expect(this.overlay.first(), 'Verify calendar overlay is visible').toBeVisible();
+    });
+  }
+
+  async selectDayInCurrentMonth(day: number | string): Promise<void> {
+    await test.step(`Select day ${day} in current calendar month`, async () => {
+      await this.open();
+      const dayCell = this.overlay
+        .locator('.p-datepicker-calendar td:not(.p-datepicker-other-month) span')
+        .filter({ hasText: new RegExp(`^${day}$`) })
+        .first();
+
+      await expect(dayCell, `Verify day ${day} is visible in calendar`).toBeVisible();
+      await dayCell.click();
+    });
+  }
+
+  async expectDateValue(expectedDate: string): Promise<void> {
+    await test.step(`Verify datepicker input has value "${expectedDate}"`, async () => {
+      await expect(this.input).toHaveValue(expectedDate);
+    });
+  }
+}

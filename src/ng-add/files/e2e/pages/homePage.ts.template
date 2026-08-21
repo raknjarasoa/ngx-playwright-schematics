@@ -1,8 +1,8 @@
 import { Locator, Page, expect, test } from '@playwright/test';
-import Routes from '@pages/routes';
+import { Routes } from '@pages/routes';
 import { APP_TITLE } from '@fixtures/constants';
 
-export default class HomePage {
+export class HomePage {
   private readonly page: Page;
   readonly routes: Routes;
   readonly heading: Locator;

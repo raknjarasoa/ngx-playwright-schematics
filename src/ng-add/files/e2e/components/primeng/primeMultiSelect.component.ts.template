@@ -1,0 +1,97 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+
+/**
+ * Component Object for PrimeNG MultiSelect (`p-multiselect`).
+ *
+ * Handles multiple option toggles, select all checkbox, chip representations,
+ * search filters, and body-appended overlays.
+ */
+export class PrimeMultiSelectComponent {
+  readonly root: Locator;
+  readonly label: Locator;
+  readonly clearIcon: Locator;
+  readonly overlay: Locator;
+  readonly filterInput: Locator;
+  readonly selectAllCheckbox: Locator;
+  readonly closeButton: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator: Locator,
+  ) {
+    this.root = rootLocator;
+    this.label = this.root.locator('.p-multiselect-label');
+    this.clearIcon = this.root.locator('.p-multiselect-clear-icon');
+
+    this.overlay = page
+      .locator('.p-multiselect-panel, .p-connected-overlay')
+      .filter({ hasNot: page.locator('.p-hidden') });
+    this.filterInput = this.overlay.locator('.p-multiselect-filter, input[type="text"]');
+    this.selectAllCheckbox = this.overlay.locator('.p-multiselect-header .p-checkbox, .p-multiselect-header [role="checkbox"]');
+    this.closeButton = this.overlay.locator('.p-multiselect-close, [aria-label="Close"]');
+  }
+
+  async open(): Promise<void> {
+    await test.step('Open PrimeNG MultiSelect overlay', async () => {
+      await expect(this.root, 'Verify multiselect is visible').toBeVisible();
+      await this.root.click();
+      await expect(this.overlay.first(), 'Verify multiselect overlay panel is open').toBeVisible();
+    });
+  }
+
+  async close(): Promise<void> {
+    await test.step('Close PrimeNG MultiSelect overlay', async () => {
+      if (await this.overlay.first().isVisible()) {
+        if (await this.closeButton.isVisible()) {
+          await this.closeButton.click();
+        } else {
+          await this.root.click();
+        }
+        await expect(this.overlay.first()).toBeHidden();
+      }
+    });
+  }
+
+  async selectOption(optionText: string | RegExp): Promise<void> {
+    await test.step(`Toggle option "${optionText}" in PrimeNG MultiSelect`, async () => {
+      await this.open();
+
+      const optionItem = this.overlay
+        .locator('.p-multiselect-item, [role="option"]')
+        .filter({ hasText: optionText })
+        .first();
+
+      await expect(optionItem, `Verify option "${optionText}" is visible`).toBeVisible();
+      await optionItem.click();
+    });
+  }
+
+  async selectMultipleOptions(options: (string | RegExp)[]): Promise<void> {
+    await test.step(`Select multiple options [${options.join(', ')}] in MultiSelect`, async () => {
+      await this.open();
+      for (const opt of options) {
+        const optionItem = this.overlay
+          .locator('.p-multiselect-item, [role="option"]')
+          .filter({ hasText: opt })
+          .first();
+        await expect(optionItem, `Verify option "${opt}" is visible`).toBeVisible();
+        await optionItem.click();
+      }
+      await this.close();
+    });
+  }
+
+  async toggleSelectAll(): Promise<void> {
+    await test.step('Toggle Select All in PrimeNG MultiSelect', async () => {
+      await this.open();
+      await expect(this.selectAllCheckbox, 'Verify Select All checkbox is visible').toBeVisible();
+      await this.selectAllCheckbox.click();
+    });
+  }
+
+  async expectSelectedCount(count: number): Promise<void> {
+    await test.step(`Verify MultiSelect has ${count} items selected`, async () => {
+      await expect(this.label).toContainText(new RegExp(`${count} items selected|^${count}$`));
+    });
+  }
+}

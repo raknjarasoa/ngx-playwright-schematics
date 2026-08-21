@@ -1,18 +1,18 @@
+import { APIClient } from '@helpers/apiClient';
 import { test as base } from '@playwright/test';
-import { z } from 'zod';
 import { randomBytes, randomUUID } from 'crypto';
-import APIClient from '@helpers/apiClient';
+import { z } from 'zod';
 
 /**
  * Enterprise Zod API Schemas for Contract Testing
  */
 export const UserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.string().email(),
+  id: z.uuid(),
+  email: z.email(),
   name: z.string().min(1),
   role: z.enum(['admin', 'user', 'guest']).default('user'),
   token: z.string().min(10),
-  createdAt: z.string().datetime().optional(),
+  createdAt: z.string().optional(),
 });
 export type User = z.infer<typeof UserSchema>;
 
@@ -29,6 +29,39 @@ export const ErrorResponseSchema = z.object({
   timestamp: z.string().optional(),
 });
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+
+export const ClickHouseMetaFieldSchema = z.object({
+  name: z.string(),
+  type: z.string(),
+});
+export type ClickHouseMetaField = z.infer<typeof ClickHouseMetaFieldSchema>;
+
+export const PnLRecordSchema = z.object({
+  trade_id: z.string(),
+  book: z.string(),
+  desk: z.string(),
+  currency: z.string(),
+  pnl_usd: z.number(),
+  var_95: z.number(),
+  delta_usd: z.number(),
+  trade_count: z.number().int().nonnegative(),
+  cob_date: z.string(),
+});
+export type PnLRecord = z.infer<typeof PnLRecordSchema>;
+
+export const ClickHousePnLResponseSchema = z.object({
+  meta: z.array(ClickHouseMetaFieldSchema),
+  data: z.array(PnLRecordSchema),
+  rows: z.number().int().nonnegative(),
+  statistics: z
+    .object({
+      elapsed: z.number(),
+      rows_read: z.number(),
+      bytes_read: z.number(),
+    })
+    .optional(),
+});
+export type ClickHousePnLResponse = z.infer<typeof ClickHousePnLResponseSchema>;
 
 /**
  * Synthetic Test Data Generators
@@ -47,11 +80,56 @@ export function generateUserData(overrides: Partial<User> = {}): User {
   };
 }
 
+export function generatePnLRecords(count = 5, overrides: Partial<PnLRecord> = {}): PnLRecord[] {
+  const desks = ['Global Equities', 'Macro Rates', 'Credit Trading', 'Commodities'];
+  const books = ['EQ_VOL_1', 'RATES_STIR_2', 'CREDIT_HY_1', 'COMM_OIL_3'];
+  const currencies = ['USD', 'EUR', 'GBP', 'JPY'];
+
+  return Array.from({ length: count }, (_, idx) => ({
+    trade_id: `TRD-${1000 + idx}`,
+    book: books[idx % books.length],
+    desk: desks[idx % desks.length],
+    currency: currencies[idx % currencies.length],
+    pnl_usd: Math.round((Math.random() * 2_000_000 - 500_000) * 100) / 100,
+    var_95: Math.round(Math.random() * 500_000 * 100) / 100,
+    delta_usd: Math.round((Math.random() * 1_000_000 - 200_000) * 100) / 100,
+    trade_count: Math.floor(Math.random() * 500) + 10,
+    cob_date: new Date().toISOString().split('T')[0],
+    ...overrides,
+  }));
+}
+
+export function generateClickHousePnLResponse(
+  count = 10,
+  overrides: Partial<PnLRecord> = {},
+): ClickHousePnLResponse {
+  const data = generatePnLRecords(count, overrides);
+  return {
+    meta: [
+      { name: 'trade_id', type: 'String' },
+      { name: 'book', type: 'String' },
+      { name: 'desk', type: 'String' },
+      { name: 'currency', type: 'String' },
+      { name: 'pnl_usd', type: 'Float64' },
+      { name: 'var_95', type: 'Float64' },
+      { name: 'delta_usd', type: 'Float64' },
+      { name: 'trade_count', type: 'UInt32' },
+      { name: 'cob_date', type: 'Date' },
+    ],
+    data,
+    rows: data.length,
+    statistics: { elapsed: 0.012, rows_read: 250_000, bytes_read: 4_500_000 },
+  };
+}
+
 export type DataFactoryFixtures = {
   createdUser: User;
-  mockNetworkFault: (urlPattern: string | RegExp, status?: number, errorMsg?: string) => Promise<void>;
+  mockNetworkFault: (
+    urlPattern: string | RegExp,
+    status?: number,
+    errorMsg?: string,
+  ) => Promise<void>;
   mockNetworkLatency: (urlPattern: string | RegExp, delayMs?: number) => Promise<void>;
-  mockRateLimit: (urlPattern: string | RegExp) => Promise<void>;
 };
 
 export const dataFactoryFixture = base.extend<DataFactoryFixtures>({
@@ -83,7 +161,7 @@ export const dataFactoryFixture = base.extend<DataFactoryFixtures>({
     const mocker = async (
       urlPattern: string | RegExp,
       status = 500,
-      errorMsg = 'Simulated Enterprise Network Fault'
+      errorMsg = 'Simulated Enterprise Network Fault',
     ) => {
       await page.route(urlPattern, async (route) => {
         const body: ErrorResponse = {
@@ -112,22 +190,5 @@ export const dataFactoryFixture = base.extend<DataFactoryFixtures>({
       });
     };
     await use(latencyMocker);
-  },
-
-  /**
-   * Rate Limit Injection: Simulate 429 Too Many Requests
-   */
-  mockRateLimit: async ({ page }, use) => {
-    const rateLimitMocker = async (urlPattern: string | RegExp) => {
-      await page.route(urlPattern, async (route) => {
-        await route.fulfill({
-          status: 429,
-          contentType: 'application/json',
-          headers: { 'Retry-After': '30' },
-          body: JSON.stringify({ error: 'Too Many Requests - Rate Limit Exceeded', statusCode: 429 }),
-        });
-      });
-    };
-    await use(rateLimitMocker);
   },
 });

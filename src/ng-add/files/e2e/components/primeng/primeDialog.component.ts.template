@@ -1,0 +1,64 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+
+/**
+ * Component Object for PrimeNG Dialog (`p-dialog` / `.p-dialog`).
+ *
+ * Encapsulates modal dialogs, header titles, content areas, footer action buttons,
+ * and backdrop mask interactions.
+ */
+export class PrimeDialogComponent {
+  readonly root: Locator;
+  readonly header: Locator;
+  readonly title: Locator;
+  readonly closeButton: Locator;
+  readonly maximizeButton: Locator;
+  readonly content: Locator;
+  readonly footer: Locator;
+  readonly mask: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator?: Locator,
+  ) {
+    this.root = rootLocator || page.locator('.p-dialog, [role="dialog"]').filter({ hasNot: page.locator('.p-hidden') }).first();
+    this.header = this.root.locator('.p-dialog-header');
+    this.title = this.root.locator('.p-dialog-title, [role="heading"]');
+    this.closeButton = this.root.locator('.p-dialog-header-close, button[aria-label="Close"]');
+    this.maximizeButton = this.root.locator('.p-dialog-header-maximize');
+    this.content = this.root.locator('.p-dialog-content');
+    this.footer = this.root.locator('.p-dialog-footer');
+    this.mask = page.locator('.p-dialog-mask, .p-component-overlay');
+  }
+
+  async verifyOpen(): Promise<void> {
+    await test.step('Verify PrimeNG dialog is open and visible', async () => {
+      await expect(this.root, 'Verify dialog container is visible').toBeVisible();
+    });
+  }
+
+  async verifyTitle(expectedTitle: string | RegExp): Promise<void> {
+    await test.step(`Verify dialog title matches "${expectedTitle}"`, async () => {
+      await expect(this.title).toBeVisible();
+      await expect(this.title).toHaveText(expectedTitle);
+    });
+  }
+
+  async close(): Promise<void> {
+    await test.step('Close PrimeNG dialog via header close button', async () => {
+      await expect(this.closeButton, 'Verify dialog close button is visible').toBeVisible();
+      await this.closeButton.click();
+      await expect(this.root).toBeHidden();
+    });
+  }
+
+  async clickFooterButton(buttonName: string | RegExp): Promise<void> {
+    await test.step(`Click footer button "${buttonName}" in dialog`, async () => {
+      const btn = this.footer.getByRole('button', { name: buttonName })
+        .or(this.footer.locator('button').filter({ hasText: buttonName }))
+        .first();
+
+      await expect(btn, `Verify footer button "${buttonName}" is visible`).toBeVisible();
+      await btn.click();
+    });
+  }
+}

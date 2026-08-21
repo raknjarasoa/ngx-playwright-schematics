@@ -1,0 +1,98 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+import { Routes } from '@pages/routes';
+import {
+  ChartWidgetComponent,
+  KpiCardWidgetComponent,
+  PostItWidgetComponent,
+  TableWidgetComponent,
+} from '@components/cockpitWidgets.component';
+
+/**
+ * Page Object for the cockpit dashboard.
+ *
+ * The page **owns** its widgets: each one is constructed here, bound to its slot in the grid, and
+ * reached as `cockpitPage.pnlTableWidget`. Registering a widget as a component fixture instead
+ * would hand the spec a second instance that is not the one this page rendered.
+ *
+ * NOTE: this suite's sandbox app serves no `/cockpit` route, so this page is a reference
+ * implementation — it compiles and type-checks, but no spec here exercises it.
+ */
+export class CockpitPage {
+  private readonly page: Page;
+  readonly routes: Routes;
+  readonly dashboardGrid: Locator;
+  readonly addWidgetButton: Locator;
+  readonly presetSelector: Locator;
+  readonly savePresetButton: Locator;
+
+  readonly pnlTableWidget: TableWidgetComponent;
+  readonly riskChartWidget: ChartWidgetComponent;
+  readonly netDeltaKpi: KpiCardWidgetComponent;
+  readonly deskNotes: PostItWidgetComponent;
+
+  constructor(page: Page) {
+    this.page = page;
+    this.routes = new Routes(page);
+
+    this.dashboardGrid = page.locator('[data-test="cockpit-dashboard-grid"], .cockpit-grid');
+    this.addWidgetButton = page
+      .getByRole('button', { name: /add widget|ajouter/i })
+      .or(page.locator('[data-test="add-widget-btn"]'));
+    this.presetSelector = page
+      .getByRole('combobox', { name: /preset|vue/i })
+      .or(page.locator('[data-test="preset-selector"]'));
+    this.savePresetButton = page
+      .getByRole('button', { name: /save preset|enregistrer la vue/i })
+      .or(page.locator('[data-test="save-preset-btn"]'));
+
+    this.pnlTableWidget = new TableWidgetComponent(
+      page,
+      this.dashboardGrid.locator('[data-test="widget-pnl-table"]'),
+    );
+    this.riskChartWidget = new ChartWidgetComponent(
+      page,
+      this.dashboardGrid.locator('[data-test="widget-risk-chart"]'),
+    );
+    this.netDeltaKpi = new KpiCardWidgetComponent(
+      page,
+      this.dashboardGrid.locator('[data-test="widget-kpi-delta"]'),
+    );
+    this.deskNotes = new PostItWidgetComponent(
+      page,
+      this.dashboardGrid.locator('[data-test="widget-desk-notes"]'),
+    );
+  }
+
+  async visit(): Promise<void> {
+    await test.step('Navigate to the cockpit dashboard', async () => {
+      await this.routes.goToCockpit();
+      await expect(this.dashboardGrid).toBeVisible();
+    });
+  }
+
+  /** Slot lookup for cockpits whose widgets are dynamic rather than known up front. */
+  getWidgetByTitle(title: string): Locator {
+    return this.dashboardGrid.locator('[data-test="cockpit-widget"]').filter({ hasText: title });
+  }
+
+  async selectPreset(presetName: string): Promise<void> {
+    await test.step(`Switch cockpit preset to "${presetName}"`, async () => {
+      await this.presetSelector.selectOption({ label: presetName });
+      await expect(this.pnlTableWidget.container.root).toBeVisible();
+    });
+  }
+
+  /**
+   * Guard assertion — every widget has finished its ClickHouse query and painted.
+   *
+   * Call this after navigation or a preset switch so downstream business assertions run against
+   * settled widgets rather than racing their queries.
+   */
+  async expectAllWidgetsLoaded(): Promise<void> {
+    await test.step('Verify all cockpit widgets have loaded', async () => {
+      await this.pnlTableWidget.grid.expectLoadingHidden();
+      await this.riskChartWidget.chart.expectRendered();
+      await expect(this.netDeltaKpi.metricValue).toBeVisible();
+    });
+  }
+}

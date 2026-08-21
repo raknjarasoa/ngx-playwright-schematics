@@ -1,20 +1,43 @@
 import { Locator, Page, expect, test } from '@playwright/test';
 
+/**
+ * Generic modal/dialog shell. Owns the dialog *chrome* — root, title, close control, and
+ * open/closed state — so specialized modals compose this instead of re-declaring those
+ * selectors. Pass a scoped `rootLocator` to bind the shell to a specific dialog instance.
+ */
 export class ModalComponent {
   readonly root: Locator;
   readonly closeButton: Locator;
   readonly title: Locator;
   readonly bodyText: Locator;
 
-  constructor(private readonly page: Page, rootLocator?: Locator) {
+  constructor(
+    private readonly page: Page,
+    rootLocator?: Locator,
+  ) {
     this.root = rootLocator || page.getByRole('dialog').or(page.locator('.modal, [data-test="modal"]'));
-    this.closeButton = this.root.getByRole('button', { name: /close|dismiss/i }).or(this.root.locator('.close-button, [data-test="close-button"]'));
+    // Cover en/fr labels and both data-test hooks so every dialog's close control resolves here.
+    this.closeButton = this.root
+      .getByRole('button', { name: /close|dismiss|annuler|fermer/i })
+      .or(this.root.locator('.close-button, [data-test="close-button"], [data-test="close-modal"]'));
     this.title = this.root.getByRole('heading', { level: 2 }).or(this.root.locator('h2, .modal-title'));
     this.bodyText = this.root.locator('.modal-body, .content');
   }
 
   async isOpen(): Promise<boolean> {
     return await this.root.isVisible().catch(() => false);
+  }
+
+  async expectVisible(): Promise<void> {
+    await test.step('Verify modal is visible', async () => {
+      await expect(this.root).toBeVisible();
+    });
+  }
+
+  async expectClosed(): Promise<void> {
+    await test.step('Verify modal is closed', async () => {
+      await expect(this.root).toBeHidden();
+    });
   }
 
   async close(): Promise<void> {

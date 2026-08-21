@@ -33,9 +33,12 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium firefox
 
-      - name: Install Linux OS Dependencies (Cache Hit)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium firefox
+      - name: Pre-Authenticate Users (Auth Setup)
+        env:
+          CI: 'true'
+          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL || 'admin@example.com' }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD || 'Password123!' }}
+        run: npm run e2e:auth
 
       - name: Run E2E tests
         env:

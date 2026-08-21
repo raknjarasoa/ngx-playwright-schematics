@@ -1,0 +1,105 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+import { ModalComponent } from '@components/modal.component';
+
+/**
+ * Component Object for the Groupings Configuration Modal Dialog.
+ *
+ * The dialog *chrome* (root, title, close button, visibility) is delegated to a composed
+ * {@link ModalComponent}, so those selectors live in exactly one place. This class adds only the
+ * groupings-specific controls: search, drag & drop column ordering, reset, and apply.
+ */
+export class GroupingsModalComponent {
+  readonly modal: ModalComponent;
+  readonly root: Locator;
+  readonly title: Locator;
+  readonly closeButton: Locator;
+  readonly searchInput: Locator;
+  readonly availableColumnsList: Locator;
+  readonly dropZone: Locator;
+  readonly activeGroupChips: Locator;
+  readonly resetButton: Locator;
+  readonly applyButton: Locator;
+
+  constructor(page: Page, rootLocator?: Locator) {
+    const root =
+      rootLocator ||
+      page.getByRole('dialog', { name: /grouping/i }).or(page.locator('[data-test="groupings-modal"], .groupings-modal'));
+
+    // Compose the generic shell for chrome; scope it to this dialog's root.
+    this.modal = new ModalComponent(page, root);
+    this.root = this.modal.root;
+    this.title = this.modal.title;
+    this.closeButton = this.modal.closeButton;
+
+    // Groupings-specific controls, all scoped to the dialog root.
+    this.searchInput = this.root
+      .getByRole('searchbox')
+      .or(this.root.getByPlaceholder(/search column|rechercher/i))
+      .or(this.root.locator('input[type="search"], [data-test="column-search"]'));
+    this.availableColumnsList = this.root
+      .getByRole('list', { name: /available columns/i })
+      .or(this.root.locator('.available-columns, [data-test="available-columns"]'));
+    this.dropZone = this.root.locator('.drop-zone, .active-groupings, [data-test="groupings-drop-zone"]');
+    this.activeGroupChips = this.dropZone.getByRole('listitem').or(this.dropZone.locator('.group-chip, [data-test="group-chip"]'));
+    this.resetButton = this.root.getByRole('button', { name: /reset|réinitialiser/i }).or(this.root.locator('[data-test="reset-groupings"]'));
+    this.applyButton = this.root.getByRole('button', { name: /apply|appliquer/i }).or(this.root.locator('[data-test="apply-groupings"]'));
+  }
+
+  async expectVisible(): Promise<void> {
+    await test.step('Verify Groupings modal is visible', async () => {
+      await expect(this.root).toBeVisible();
+    });
+  }
+
+  async expectClosed(): Promise<void> {
+    await test.step('Verify Groupings modal is closed', async () => {
+      await expect(this.root).toBeHidden();
+    });
+  }
+
+  async searchColumn(columnName: string): Promise<void> {
+    await test.step(`Search for column: "${columnName}"`, async () => {
+      await this.searchInput.fill(columnName);
+    });
+  }
+
+  async getColumnItem(columnName: string): Promise<Locator> {
+    return this.root.getByText(columnName, { exact: true }).or(this.root.locator(`[data-column="${columnName}"]`));
+  }
+
+  async dragAndDropColumn(columnName: string): Promise<void> {
+    await test.step(`Drag column "${columnName}" to active groupings drop zone`, async () => {
+      const columnItem = await this.getColumnItem(columnName);
+      await expect(columnItem).toBeVisible();
+      await columnItem.dragTo(this.dropZone);
+    });
+  }
+
+  async removeGroupingChip(columnName: string): Promise<void> {
+    await test.step(`Remove grouping chip: "${columnName}"`, async () => {
+      const chip = this.activeGroupChips.filter({ hasText: columnName });
+      const removeBtn = chip.getByRole('button', { name: /remove|delete/i }).or(chip.locator('.remove-chip, [data-test="remove-chip"]'));
+      await removeBtn.click();
+    });
+  }
+
+  async reset(): Promise<void> {
+    await test.step('Click Reset groupings button', async () => {
+      await this.resetButton.click();
+    });
+  }
+
+  async apply(): Promise<void> {
+    await test.step('Click Apply groupings button and verify modal closes', async () => {
+      await this.applyButton.click();
+      await this.expectClosed();
+    });
+  }
+
+  async close(): Promise<void> {
+    await test.step('Close Groupings modal without applying', async () => {
+      // Chrome behavior (click close + assert hidden) lives in the composed shell.
+      await this.modal.close();
+    });
+  }
+}

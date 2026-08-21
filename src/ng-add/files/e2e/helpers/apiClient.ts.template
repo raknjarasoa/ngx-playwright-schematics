@@ -6,7 +6,7 @@ import { UserCredentials } from '@fixtures/creds';
  * Enterprise API Client supporting both Headless APIRequestContext (data seeding/teardown)
  * and Browser Page request context with Zod contract validation.
  */
-export default class APIClient {
+export class APIClient {
   private page?: Page;
   private requestContext?: APIRequestContext;
   /** True only when this instance created the context itself and is responsible for disposing it. */

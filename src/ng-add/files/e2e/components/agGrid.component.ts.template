@@ -1,0 +1,160 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+import { parseFinancialNumber } from '@helpers/financial';
+
+/**
+ * Component Object for an AG-Grid instance (PnL blotters, risk matrices, table widgets).
+ *
+ * AG-Grid virtualizes rows, so a row that exists in the row model may have no DOM node until it
+ * is scrolled into view. Every cell accessor here scrolls first and asserts visibility, which is
+ * what keeps grid assertions off `waitForTimeout`.
+ *
+ * Two structural facts drive the selectors:
+ *  - Rows and cells are addressed by `row-id` / `col-id` attributes, not by position.
+ *  - Filter and column menus render into a **body-level portal** (`.ag-popup`), outside the grid
+ *    root — so those, and only those, are located from `page` rather than from `this.root`.
+ *
+ * Methods marked "Enterprise" depend on AG-Grid Enterprise features (row grouping, pivot mode,
+ * the tool panel). They render no DOM at all under AG-Grid Community.
+ *
+ * NOTE: this suite's sandbox app ships no AG-Grid, so these selectors are modelled on AG-Grid's
+ * default DOM and are not exercised by any spec here. Verify them against the real grid the
+ * first time you use this component, and adjust the `[data-test]` fallbacks to match your app.
+ */
+export class AgGridComponent {
+  readonly root: Locator;
+  readonly headerRow: Locator;
+  readonly rows: Locator;
+  readonly loadingOverlay: Locator;
+  readonly noRowsOverlay: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator?: Locator,
+  ) {
+    this.root = rootLocator || page.locator('.ag-root-wrapper, [data-test="ag-grid"]').first();
+    this.headerRow = this.root.locator('.ag-header-row');
+    this.rows = this.root.locator('.ag-row');
+    this.loadingOverlay = this.root.locator('.ag-overlay-loading-center, .ag-loading');
+    this.noRowsOverlay = this.root.locator('.ag-overlay-no-rows-center');
+  }
+
+  getHeaderCell(colId: string): Locator {
+    return this.root.locator(`.ag-header-cell[col-id="${colId}"]`);
+  }
+
+  getRow(rowId: string): Locator {
+    return this.root.locator(`.ag-row[row-id="${rowId}"]`);
+  }
+
+  getCell(rowId: string, colId: string): Locator {
+    return this.getRow(rowId).locator(`.ag-cell[col-id="${colId}"]`);
+  }
+
+  /** Scroll a virtualized row into the rendered viewport and return it. */
+  async scrollToRow(rowId: string): Promise<Locator> {
+    const row = this.getRow(rowId);
+    await row.scrollIntoViewIfNeeded();
+    await expect(row).toBeVisible();
+    return row;
+  }
+
+  async getCellValue(rowId: string, colId: string): Promise<string> {
+    const cell = this.getCell(rowId, colId);
+    await cell.scrollIntoViewIfNeeded();
+    await expect(cell).toBeVisible();
+    return (await cell.textContent())?.trim() ?? '';
+  }
+
+  /** Cell text parsed as a number — see {@link parseFinancialNumber}. */
+  async getFinancialCellValue(rowId: string, colId: string): Promise<number> {
+    return parseFinancialNumber(await this.getCellValue(rowId, colId));
+  }
+
+  /**
+   * Click a column header until it reaches `direction`.
+   *
+   * AG-Grid cycles ascending → descending → none, so three clicks return to the start; the
+   * bounded loop reaches any target state without ever spinning.
+   */
+  async sortColumn(colId: string, direction: 'ascending' | 'descending'): Promise<void> {
+    await test.step(`Sort AG-Grid column "${colId}" ${direction}`, async () => {
+      const header = this.getHeaderCell(colId);
+      await expect(header).toBeVisible();
+
+      for (let click = 0; click < 3; click++) {
+        if ((await header.getAttribute('aria-sort')) === direction) break;
+        await header.click();
+      }
+
+      await expect(header).toHaveAttribute('aria-sort', direction);
+    });
+  }
+
+  /** Apply a text filter through the column's filter popup (rendered in a body portal). */
+  async filterColumnText(colId: string, filterText: string): Promise<void> {
+    await test.step(`Filter AG-Grid column "${colId}" by "${filterText}"`, async () => {
+      await this.getHeaderCell(colId)
+        .locator('.ag-header-icon.ag-filter-icon, [aria-label="Filter"]')
+        .click();
+
+      const popup = this.page.locator('.ag-popup .ag-filter, .ag-popup .ag-menu').first();
+      await expect(popup).toBeVisible();
+
+      await popup.locator('input[type="text"], input[type="search"]').first().fill(filterText);
+
+      // Filter popups either auto-apply or expose an explicit Apply button, depending on config.
+      const applyButton = popup.getByRole('button', { name: /apply|appliquer/i });
+      if (await applyButton.isVisible()) {
+        await applyButton.click();
+      } else {
+        await this.page.keyboard.press('Escape');
+      }
+
+      await expect(popup).toBeHidden();
+    });
+  }
+
+  /** Enterprise — expand a row group by its label. No-op if it is already expanded. */
+  async expandRowGroup(groupName: string): Promise<void> {
+    await test.step(`Expand AG-Grid row group "${groupName}"`, async () => {
+      const groupRow = this.rows.filter({ hasText: groupName }).first();
+      await groupRow.scrollIntoViewIfNeeded();
+
+      if ((await groupRow.getAttribute('aria-expanded')) === 'true') return;
+
+      await groupRow.locator('.ag-group-contracted, [aria-expanded="false"]').first().click();
+      await expect(groupRow).toHaveAttribute('aria-expanded', 'true');
+    });
+  }
+
+  /** Enterprise — toggle pivot mode from the columns tool panel. */
+  async togglePivotMode(): Promise<void> {
+    await test.step('Toggle AG-Grid pivot mode', async () => {
+      await this.root
+        .locator('.ag-side-buttons')
+        .getByRole('button', { name: /columns|colonnes/i })
+        .click();
+      await this.root.locator('.ag-pivot-mode-panel').getByRole('checkbox').click();
+    });
+  }
+
+  async expectRowCount(count: number): Promise<void> {
+    await test.step(`Verify AG-Grid renders ${count} rows`, async () => {
+      await expect(this.rows).toHaveCount(count);
+    });
+  }
+
+  async expectCellValue(rowId: string, colId: string, expected: string | RegExp): Promise<void> {
+    await test.step(`Verify AG-Grid cell [${rowId}, ${colId}] matches "${expected}"`, async () => {
+      await this.getCell(rowId, colId).scrollIntoViewIfNeeded();
+      await expect(this.getCell(rowId, colId)).toHaveText(expected);
+    });
+  }
+
+  /** Guard assertion — the grid has finished its (possibly slow) query and painted. */
+  async expectLoadingHidden(): Promise<void> {
+    await test.step('Verify AG-Grid loading overlay is hidden', async () => {
+      await expect(this.loadingOverlay).toBeHidden();
+    });
+  }
+}

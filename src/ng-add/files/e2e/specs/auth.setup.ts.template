@@ -1,10 +1,17 @@
-import { test } from '@pages/testExtender';
-import creds from '@fixtures/creds';
+import { test } from '@fixtures/index';
+import { creds } from '@fixtures/creds';
 import path from 'path';
+import fs from 'fs';
 
 const authDir = path.join(process.cwd(), 'e2e', 'auth');
 
-test.describe('Setup user session authentication', () => {
+test.describe('Setup user session authentication', { tag: ['@auth', '@setup'] }, () => {
+  test.beforeAll(() => {
+    if (!fs.existsSync(authDir)) {
+      fs.mkdirSync(authDir, { recursive: true });
+    }
+  });
+
   test('Setup default user storage state', async ({ page, api, homePage }) => {
     const defaultCredentials = creds.getCredentials('default');
     const storageStatePath = path.join(authDir, 'default.json');
@@ -12,6 +19,16 @@ test.describe('Setup user session authentication', () => {
     await homePage.visit('/');
     await api.performAPILogin(defaultCredentials);
     await page.context().storageState({ path: storageStatePath });
-    console.log(`Saved session storageState to ${storageStatePath}`);
+    console.log(`[Auth Setup] Saved default storageState to ${storageStatePath}`);
+  });
+
+  test('Setup admin user storage state', async ({ page, api, homePage }) => {
+    const adminCredentials = creds.getCredentials('admin');
+    const storageStatePath = path.join(authDir, 'admin.json');
+
+    await homePage.visit('/');
+    await api.performAPILogin(adminCredentials);
+    await page.context().storageState({ path: storageStatePath });
+    console.log(`[Auth Setup] Saved admin storageState to ${storageStatePath}`);
   });
 });

@@ -1,0 +1,97 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+import { WidgetContainerComponent } from '@components/widgetContainer.component';
+import { AgGridComponent } from '@components/agGrid.component';
+import { HighchartsComponent } from '@components/highcharts.component';
+import { parseFinancialNumber } from '@helpers/financial';
+
+/**
+ * The four widget types a cockpit slot can hold.
+ *
+ * Each one composes {@link WidgetContainerComponent} for the shared chrome and scopes its own
+ * payload to `container.body` — so a widget class only ever describes what makes it different.
+ * None of them inherit: a table widget *has* a grid, it is not *a kind of* grid.
+ *
+ * NOTE: this suite's sandbox app ships no cockpit, so these selectors are illustrative and are
+ * not exercised by any spec here. Align them with your app on first use.
+ */
+
+/** A cockpit slot holding an AG-Grid blotter. */
+export class TableWidgetComponent {
+  readonly container: WidgetContainerComponent;
+  readonly grid: AgGridComponent;
+
+  constructor(page: Page, rootLocator: Locator) {
+    this.container = new WidgetContainerComponent(page, rootLocator);
+    this.grid = new AgGridComponent(page, this.container.body);
+  }
+}
+
+/** A cockpit slot holding a Highcharts visualization. */
+export class ChartWidgetComponent {
+  readonly container: WidgetContainerComponent;
+  readonly chart: HighchartsComponent;
+
+  constructor(page: Page, rootLocator: Locator) {
+    this.container = new WidgetContainerComponent(page, rootLocator);
+    this.chart = new HighchartsComponent(page, this.container.body);
+  }
+}
+
+/** A cockpit slot holding a single headline metric and its period-over-period delta. */
+export class KpiCardWidgetComponent {
+  readonly container: WidgetContainerComponent;
+  readonly metricValue: Locator;
+  readonly deltaBadge: Locator;
+
+  constructor(page: Page, rootLocator: Locator) {
+    this.container = new WidgetContainerComponent(page, rootLocator);
+    this.metricValue = this.container.body.locator('[data-test="kpi-value"], .kpi-value');
+    this.deltaBadge = this.container.body.locator('[data-test="kpi-delta"], .kpi-delta');
+  }
+
+  /** The headline metric parsed as a number, for range or comparison assertions in a spec. */
+  async getMetric(): Promise<number> {
+    return parseFinancialNumber((await this.metricValue.textContent()) ?? '');
+  }
+
+  async expectMetric(
+    expectedValue: string | RegExp,
+    expectedDelta?: string | RegExp,
+  ): Promise<void> {
+    await test.step(`Verify KPI card shows "${expectedValue}"`, async () => {
+      await expect(this.metricValue).toHaveText(expectedValue);
+      if (expectedDelta) {
+        await expect(this.deltaBadge).toHaveText(expectedDelta);
+      }
+    });
+  }
+}
+
+/** A cockpit slot holding free-text desk commentary. */
+export class PostItWidgetComponent {
+  readonly container: WidgetContainerComponent;
+  readonly noteTextarea: Locator;
+  readonly colorPicker: Locator;
+  readonly pinButton: Locator;
+
+  constructor(page: Page, rootLocator: Locator) {
+    this.container = new WidgetContainerComponent(page, rootLocator);
+    this.noteTextarea = this.container.body.locator(
+      'textarea[data-test="post-it-text"], textarea.note-input',
+    );
+    this.colorPicker = this.container.body.locator('[data-test="post-it-color-picker"]');
+    this.pinButton = this.container.body.locator('[data-test="post-it-pin-btn"]');
+  }
+
+  async updateNote(content: string): Promise<void> {
+    await test.step(`Set post-it note content to "${content}"`, async () => {
+      await this.noteTextarea.fill(content);
+    });
+  }
+
+  async expectNote(expected: string | RegExp): Promise<void> {
+    await test.step(`Verify post-it note content matches "${expected}"`, async () => {
+      await expect(this.noteTextarea).toHaveValue(expected);
+    });
+  }
+}

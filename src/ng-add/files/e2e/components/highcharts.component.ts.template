@@ -1,0 +1,114 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+
+/**
+ * Component Object for a Highcharts visualization (VaR trends, PnL attribution, risk ladders).
+ *
+ * Highcharts renders into SVG, so there are no roles to target — series, points and legend items
+ * are addressed through Highcharts' own stable class names. Charts also animate on first paint;
+ * {@link expectRendered} is the guard that replaces sleeping on that animation.
+ *
+ * NOTE: this suite's sandbox app ships no Highcharts, so these selectors are modelled on the
+ * library's default SVG output and are not exercised by any spec here. Verify them against the
+ * real chart the first time you use this component.
+ */
+export class HighchartsComponent {
+  readonly root: Locator;
+  readonly svg: Locator;
+  readonly seriesGroup: Locator;
+  readonly legend: Locator;
+  readonly loadingOverlay: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator?: Locator,
+  ) {
+    this.root =
+      rootLocator || page.locator('.highcharts-container, [data-test="highcharts-widget"]').first();
+    this.svg = this.root.locator('svg.highcharts-root');
+    this.seriesGroup = this.root.locator('.highcharts-series-group');
+    this.legend = this.root.locator('.highcharts-legend');
+    this.loadingOverlay = this.root.locator('.highcharts-loading');
+  }
+
+  getSeries(seriesIndex = 0): Locator {
+    return this.seriesGroup.locator(`.highcharts-series-${seriesIndex}`);
+  }
+
+  getPoint(seriesIndex = 0, pointIndex = 0): Locator {
+    return this.getSeries(seriesIndex).locator('.highcharts-point').nth(pointIndex);
+  }
+
+  getLegendItem(seriesName: string): Locator {
+    return this.legend.locator('.highcharts-legend-item').filter({ hasText: seriesName });
+  }
+
+  /**
+   * Guard assertion — the chart has loaded its data and drawn at least one mark.
+   *
+   * Asserting on a drawn point (rather than on the SVG element) is what distinguishes a chart
+   * that has *rendered* from one that has merely been *mounted* with an empty series.
+   */
+  async expectRendered(expectedPointCount?: number): Promise<void> {
+    await test.step('Verify Highcharts chart has finished rendering', async () => {
+      await expect(this.loadingOverlay).toBeHidden();
+      await expect(this.svg).toBeVisible();
+      await expect(
+        this.seriesGroup.locator('.highcharts-point, .highcharts-graph').first(),
+      ).toBeVisible();
+
+      if (expectedPointCount !== undefined) {
+        await expect(this.getSeries(0).locator('.highcharts-point')).toHaveCount(
+          expectedPointCount,
+        );
+      }
+    });
+  }
+
+  async hoverPoint(seriesIndex = 0, pointIndex = 0): Promise<void> {
+    await test.step(`Hover chart series ${seriesIndex}, point ${pointIndex}`, async () => {
+      await this.getPoint(seriesIndex, pointIndex).hover();
+    });
+  }
+
+  /**
+   * Hover a point and assert its tooltip content.
+   *
+   * Highcharts renders the tooltip inside the chart SVG by default, but into a body-level div
+   * when `tooltip.outside` is set — the `.or()` covers both without the caller caring which.
+   */
+  async verifyTooltip(
+    seriesIndex: number,
+    pointIndex: number,
+    expectedText: string | RegExp,
+  ): Promise<void> {
+    await test.step(`Verify chart tooltip on point [${seriesIndex}, ${pointIndex}]`, async () => {
+      await this.hoverPoint(seriesIndex, pointIndex);
+
+      const tooltip = this.root
+        .locator('.highcharts-tooltip')
+        .or(this.page.locator('body > .highcharts-tooltip-container'))
+        .first();
+
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip).toContainText(expectedText);
+    });
+  }
+
+  async toggleLegendItem(seriesName: string): Promise<void> {
+    await test.step(`Toggle Highcharts legend series "${seriesName}"`, async () => {
+      await this.getLegendItem(seriesName).click();
+    });
+  }
+
+  async expectSeriesVisible(seriesName: string): Promise<void> {
+    await test.step(`Verify chart series "${seriesName}" is visible`, async () => {
+      await expect(this.getLegendItem(seriesName)).not.toHaveClass(/highcharts-legend-item-hidden/);
+    });
+  }
+
+  async expectSeriesHidden(seriesName: string): Promise<void> {
+    await test.step(`Verify chart series "${seriesName}" is hidden`, async () => {
+      await expect(this.getLegendItem(seriesName)).toHaveClass(/highcharts-legend-item-hidden/);
+    });
+  }
+}

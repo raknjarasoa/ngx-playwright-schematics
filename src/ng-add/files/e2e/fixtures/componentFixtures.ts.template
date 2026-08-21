@@ -4,6 +4,10 @@ import { LoaderComponent } from '@components/loader.component';
 import { HeaderComponent } from '@components/header.component';
 import { ModalComponent } from '@components/modal.component';
 
+// Component fixtures are reserved for global chrome that any page may show (toast, loader, header)
+// and the generic modal shell. Page-embedded widgets (e.g. the groupings modal) are owned by their
+// page object — reach them via `viewPage.groupingsModal` so the spec drives the same instance the
+// page opened, not a second one.
 export type ComponentFixtures = {
   toastComponent: ToastComponent;
   loaderComponent: LoaderComponent;

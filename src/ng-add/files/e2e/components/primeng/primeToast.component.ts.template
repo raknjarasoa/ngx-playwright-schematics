@@ -1,0 +1,60 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+
+export type PrimeToastSeverity = 'success' | 'info' | 'warn' | 'error';
+
+/**
+ * Component Object for PrimeNG Toast (`p-toast` / `.p-toast`).
+ *
+ * Encapsulates floating feedback notifications, message summaries, details,
+ * and severity classifications.
+ */
+export class PrimeToastComponent {
+  readonly root: Locator;
+  readonly messages: Locator;
+
+  constructor(
+    private readonly page: Page,
+    rootLocator?: Locator,
+  ) {
+    this.root = rootLocator || page.locator('.p-toast, [role="alert"]').first();
+    this.messages = this.root.locator('.p-toast-message');
+  }
+
+  getMessage(index: number = 0): Locator {
+    return this.messages.nth(index);
+  }
+
+  async verifyToastVisible(severity?: PrimeToastSeverity): Promise<void> {
+    await test.step(`Verify PrimeNG toast notification is visible${severity ? ` with severity ${severity}` : ''}`, async () => {
+      const toast = this.messages.first();
+      await expect(toast).toBeVisible();
+      if (severity) {
+        await expect(toast).toHaveClass(new RegExp(`p-toast-message-${severity}`));
+      }
+    });
+  }
+
+  async verifyToastContent(summary: string | RegExp, detail?: string | RegExp): Promise<void> {
+    await test.step(`Verify toast content: summary "${summary}"`, async () => {
+      const toast = this.messages.first();
+      await expect(toast).toBeVisible();
+
+      const summaryLoc = toast.locator('.p-toast-summary');
+      await expect(summaryLoc).toContainText(summary);
+
+      if (detail) {
+        const detailLoc = toast.locator('.p-toast-detail');
+        await expect(detailLoc).toContainText(detail);
+      }
+    });
+  }
+
+  async closeToast(index: number = 0): Promise<void> {
+    await test.step('Dismiss toast notification', async () => {
+      const closeBtn = this.getMessage(index).locator('.p-toast-icon-close, button');
+      if (await closeBtn.isVisible()) {
+        await closeBtn.click();
+      }
+    });
+  }
+}

@@ -1,13 +1,18 @@
 import { Page } from '@playwright/test';
 
-export default class Routes {
+export class Routes {
   private readonly page: Page;
 
   readonly paths = {
     home: '/',
     login: '/login',
+    signup: '/signup',
+    accountCreated: '/account_created',
+    deleteAccount: '/delete_account',
     dashboard: '/dashboard',
     settings: '/settings',
+    view: '/view',
+    cockpit: '/cockpit',
   };
 
   constructor(page: Page) {
@@ -17,5 +22,13 @@ export default class Routes {
   async navigateTo(pathKey: keyof Routes['paths']): Promise<void> {
     const targetUrl = this.paths[pathKey];
     await this.page.goto(targetUrl);
+  }
+
+  async goToView(): Promise<void> {
+    await this.navigateTo('view');
+  }
+
+  async goToCockpit(): Promise<void> {
+    await this.navigateTo('cockpit');
   }
 }

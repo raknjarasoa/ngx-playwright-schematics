@@ -1,16 +1,26 @@
 import { test as base } from '@playwright/test';
-import Routes from '@pages/routes';
-import HomePage from '@pages/homePage';
-import LoginPage from '@pages/loginPage';
+import { Routes } from '@pages/routes';
+import { HomePage } from '@pages/homePage';
+import { LoginPage } from '@pages/loginPage';
+import { ViewPage } from '@pages/viewPage';
+import { CockpitPage } from '@pages/cockpitPage';
+import { AutomationExercisePage } from '@pages/automationExercisePage';
 
 export type PageFixtures = {
   routes: Routes;
   homePage: HomePage;
   loginPage: LoginPage;
+  viewPage: ViewPage;
+  cockpitPage: CockpitPage;
+  automationExercisePage: AutomationExercisePage;
 };
 
 export const pageFixtures = base.extend<PageFixtures>({
   routes: async ({ page }, use) => await use(new Routes(page)),
   homePage: async ({ page }, use) => await use(new HomePage(page)),
   loginPage: async ({ page }, use) => await use(new LoginPage(page)),
+  viewPage: async ({ page }, use) => await use(new ViewPage(page)),
+  cockpitPage: async ({ page }, use) => await use(new CockpitPage(page)),
+  automationExercisePage: async ({ page }, use) => await use(new AutomationExercisePage(page)),
 });
+

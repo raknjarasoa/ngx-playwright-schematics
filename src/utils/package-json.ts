@@ -23,6 +23,8 @@ export function updatePackageJson(options: Schema): Rule {
         'e2e:ui': 'playwright test --ui',
         'e2e:headed': 'playwright test --headed',
         'e2e:debug': 'playwright test --debug',
+        'e2e:auth': 'playwright test --project=setup',
+        'e2e:validate': 'npx eslint e2e && npx tsc -p e2e/tsconfig.json --noEmit && npx playwright test --list',
         'e2e:report': 'playwright show-report artifacts/playwright-report',
         'e2e:docker': 'docker run --rm --network host -v $(pwd):/work -w /work mcr.microsoft.com/playwright:v1.62.1-jammy npx playwright test',
         'e2e:docker:update-snapshots': 'docker run --rm --network host -v $(pwd):/work -w /work mcr.microsoft.com/playwright:v1.62.1-jammy npx playwright test e2e/specs/visual.spec.ts --update-snapshots',

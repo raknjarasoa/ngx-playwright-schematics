@@ -4,7 +4,7 @@ test.describe('Accessibility (WCAG 2.2 AA) Audits', () => {
   test(
     'should pass WCAG accessibility standards on the Home page',
     {
-      tag: ['@a11y', '@accessibility', '@regression'],
+      tag: ['@a11y', '@regression'],
     },
     async ({ homePage, checkA11y }) => {
       await homePage.visit('/');

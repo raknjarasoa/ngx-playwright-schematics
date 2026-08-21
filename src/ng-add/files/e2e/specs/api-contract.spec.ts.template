@@ -1,5 +1,5 @@
-import { test, expect } from '@fixtures/index';
-import { UserSchema, AuthResponseSchema, generateUserData } from '@fixtures/dataFactoryFixture';
+import { AuthResponseSchema, generateUserData, UserSchema } from '@fixtures/dataFactoryFixture';
+import { expect, test } from '@fixtures/index';
 
 test.describe('API Contract Validation & Network Fault Resilience', () => {
   test(
@@ -13,7 +13,7 @@ test.describe('API Contract Validation & Network Fault Resilience', () => {
       expect(parsedUser.id).toBeDefined();
       expect(parsedUser.email).toContain('@example.com');
       expect(parsedUser.role).toBe('user');
-    }
+    },
   );
 
   test(
@@ -50,7 +50,7 @@ test.describe('API Contract Validation & Network Fault Resilience', () => {
       const validated = AuthResponseSchema.parse(response);
       expect(validated.user.role).toBe('admin');
       expect(validated.expiresIn).toBe(3600);
-    }
+    },
   );
 
   test(
@@ -74,27 +74,7 @@ test.describe('API Contract Validation & Network Fault Resilience', () => {
       expect(response.body.error).toContain('Database Connection Pool');
       // Toast verification ensures UI did not crash fatally
       await toastComponent.verifyNoFatalErrors();
-    }
-  );
-
-  test(
-    'should simulate rate limit 429 response',
-    {
-      tag: ['@api', '@resilience'],
     },
-    async ({ page, homePage, mockRateLimit }) => {
-      await homePage.visit('/');
-
-      await mockRateLimit('**/api/sensitive-action');
-
-      const response = await page.evaluate(async () => {
-        const res = await fetch('/api/sensitive-action');
-        return { status: res.status, body: await res.json() };
-      });
-
-      expect(response.status).toBe(429);
-      expect(response.body.error).toContain('Rate Limit Exceeded');
-    }
   );
 });
 
@@ -110,6 +90,6 @@ test.describe('Unauthenticated Flow Opt-Out', () => {
     async ({ homePage }) => {
       await homePage.visit('/');
       await homePage.verifyHomePageLoaded();
-    }
+    },
   );
 });

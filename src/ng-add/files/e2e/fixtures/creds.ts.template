@@ -10,6 +10,10 @@ class CredsManager {
       email: process.env['E2E_USER_EMAIL'] || 'admin@example.com',
       password: process.env['E2E_USER_PASSWORD'] || 'Password123!',
     },
+    admin: {
+      email: process.env['E2E_ADMIN_EMAIL'] || process.env['E2E_USER_EMAIL'] || 'admin@example.com',
+      password: process.env['E2E_ADMIN_PASSWORD'] || process.env['E2E_USER_PASSWORD'] || 'Password123!',
+    },
     guest: {
       email: 'guest@example.com',
       password: 'GuestPassword123!',
@@ -23,6 +27,10 @@ class CredsManager {
     }
     return creds;
   }
+
+  getRoles(): string[] {
+    return Object.keys(this.accounts);
+  }
 }
 
-export default new CredsManager();
+export const creds = new CredsManager();

@@ -1,0 +1,59 @@
+import { Locator, Page, expect, test } from '@playwright/test';
+import { Routes } from '@pages/routes';
+import { GroupingsModalComponent } from '@components/groupingsModal.component';
+
+/**
+ * Page Object representing the /view route with table and groupings interactions.
+ */
+export class ViewPage {
+  private readonly page: Page;
+  readonly routes: Routes;
+  readonly groupingsButton: Locator;
+  readonly dataTable: Locator;
+  readonly tableHeaders: Locator;
+  readonly tableRows: Locator;
+  readonly groupingsModal: GroupingsModalComponent;
+
+  constructor(page: Page) {
+    this.page = page;
+    this.routes = new Routes(page);
+    this.groupingsButton = this.page.getByRole('button', { name: /groupings|groupement/i }).or(this.page.locator('[data-test="open-groupings-btn"]'));
+    this.dataTable = this.page.getByRole('table').or(this.page.locator('table, [data-test="data-table"]'));
+    this.tableHeaders = this.dataTable.getByRole('columnheader').or(this.dataTable.locator('th, [data-test="column-header"]'));
+    this.tableRows = this.dataTable.getByRole('row').or(this.dataTable.locator('tr, [data-test="table-row"]'));
+    this.groupingsModal = new GroupingsModalComponent(page);
+  }
+
+  async visit(path: string = '/view'): Promise<void> {
+    await test.step(`Navigate to View page: ${path}`, async () => {
+      await this.page.goto(path);
+      await this.page.waitForLoadState('domcontentloaded');
+    });
+  }
+
+  async openGroupingsModal(): Promise<void> {
+    await test.step('Open Groupings configuration modal', async () => {
+      await this.groupingsButton.click();
+      await this.groupingsModal.expectVisible();
+    });
+  }
+
+  async verifyTableVisible(): Promise<void> {
+    await test.step('Verify data table is visible below groupings control', async () => {
+      await expect(this.dataTable).toBeVisible();
+    });
+  }
+
+  async verifyTableGroupedBy(columnName: string): Promise<void> {
+    await test.step(`Verify table display is grouped by column: "${columnName}"`, async () => {
+      const groupedHeader = this.dataTable.getByRole('columnheader', { name: new RegExp(columnName, 'i') });
+      await expect(groupedHeader).toBeVisible();
+    });
+  }
+
+  async verifyGroupHeaderCount(expectedCount: number): Promise<void> {
+    await test.step(`Verify table has ${expectedCount} active grouped column headers`, async () => {
+      await expect(this.tableHeaders).toHaveCount(expectedCount);
+    });
+  }
+}

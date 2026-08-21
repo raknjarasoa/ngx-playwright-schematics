@@ -1,0 +1,31 @@
+/**
+ * Parsers for financial cell text.
+ *
+ * Grid and chart cells render money as display strings ("$1,234.56", "(4,520)", "12 bps").
+ * Assertions need numbers, so every numeric comparison goes through here rather than
+ * re-implementing the cleanup at each call site.
+ */
+
+/**
+ * Convert a rendered financial value into a number.
+ *
+ * Handles currency symbols, thousands separators, `bps` suffixes, whitespace (including the
+ * non-breaking space French locales use as a separator), and accounting-style negatives
+ * written as `(1,234)`.
+ *
+ * Returns `NaN` for text that holds no number — callers asserting on a value should compare
+ * against an expected number, which surfaces `NaN` as a normal assertion failure.
+ */
+export function parseFinancialNumber(rawText: string): number {
+  const cleaned = rawText
+    .trim()
+    .replace(/[$€£]/g, '')
+    .replace(/bps/gi, '')
+    .replace(/[\s  ]/g, '');
+
+  const isParenthesisedNegative = cleaned.startsWith('(') && cleaned.endsWith(')');
+  const unwrapped = isParenthesisedNegative ? cleaned.slice(1, -1) : cleaned;
+  const value = parseFloat(unwrapped.replace(/,/g, ''));
+
+  return isParenthesisedNegative ? -value : value;
+}
